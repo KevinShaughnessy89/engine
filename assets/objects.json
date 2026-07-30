@@ -1,0 +1,16 @@
+[
+    {
+        "UID": "object_001",
+        "filepath": "null",
+        "inverseMass": 1.0,
+        "staticFlag": 0,
+        "position": [
+            0.0,
+            0.0,
+            0.0
+        ],
+        "boundingVolume": "OBB",
+        "shaderType": "Model",
+        "textures": {}
+    }
+]

@@ -1,0 +1,14 @@
+[
+    {
+        "UID": "enemy_001",
+        "filepath": "null",
+        "health": 100,
+        "position": [
+            0.0,
+            1.0,
+            0.0
+        ],
+        "inverseMass": 1.0,
+        "boundingVolume": "OBB"
+    }
+]

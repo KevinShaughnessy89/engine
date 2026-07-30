@@ -1,0 +1,9 @@
+<HUDElement id="example" type="button" visible="true">
+    <position x="100" y="200"/>
+    <size width="300" height="50"/>
+    <texture path="path/to/your/texture.png"/>
+    <properties>
+        <property key="backgroundColor" value="#FFFFFF"/>
+        <property key="textColor" value="#000000"/>
+    </properties>
+</HUDElement>

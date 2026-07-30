@@ -1,0 +1,63 @@
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+
+# External dependencies
+/external/*
+/assets/*
+
+# Include the JSON asset files in /assets
+!assets/objects.json
+!assets/projectiles.json
+!assets/enemies.json
+!assets/lights.json
+!assets/environment.json
+
+/build/*
+/CMakeFiles/*
+/vcpkg_installed/*
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Debug files
+*.dSYM/
+*.su
+*.pdb
+
+# Other
+*.d
+engine
+.ninja_deps
+.ninja_log
+CMakeCache.txt
+CMakeLists.txt
+Makefile
+build.ninja
+
+# Editor/tooling caches and local-machine state
+.cache/
+.claude/settings.local.json
+imgui.ini
+
+# Stray local files not meant for the repo
+gitignore.save
+Screenshot *.png
+
+# Not published to the public repo
+/src/ai/
+

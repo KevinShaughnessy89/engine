@@ -1,0 +1,17 @@
+{
+    "name": "engine",
+    "version-string": "0.0.1",
+    "builtin-baseline": "aa40adda5352e87655b8583cfb2451d5e9e276fd",
+    "dependencies": [
+        "tinyexr",
+        "glfw3",
+        "assimp",
+        "glew",
+        "tracy",
+        "glm",
+        "eigen3",
+        "mimalloc",
+        "flatbuffers",
+        "entt"
+    ]
+}

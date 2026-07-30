@@ -1,0 +1,59 @@
+namespace Engine;
+
+struct Vec2 {
+  x: float;
+  y: float;
+}
+
+struct Vec3 {
+  x: float;
+  y: float;
+  z: float;
+}
+
+struct Vec4 {
+  x: float;
+  y: float;
+  z: float;
+  w: float;
+}
+
+struct IVec2 {
+  x: int;
+  y: int;
+}
+
+struct MeshVertex {
+  position: Vec4;
+  normal: Vec3;
+  texCoords: Vec2;
+  tangent: Vec3;
+  bitangent: Vec3;
+}
+
+struct Triangle {
+  vertices: [Vec3:3];
+  indices: [uint:3];
+}
+
+table FloatRow {
+  values: [float];
+}
+
+table TerrainMeshData {
+  minX: int;
+  minZ: int;
+  maxX: int;
+  maxZ: int;
+  gridCoords: IVec2;
+  currentSeed: uint;
+  meshVertices: [MeshVertex];
+  indices: [uint];
+  heightMap2D: [FloatRow];
+  normalHeightMap: [float];
+  triangles: [Triangle];
+  minHeight: float;
+  maxHeight: float;
+}
+
+root_type TerrainMeshData;

@@ -1,0 +1,78 @@
+[
+    {
+        "UID": "light_001",
+        "filepath": "null",
+        "inverseMass": 0.0,
+        "initialAcceleration": 0.0,
+        "staticFlag": 1,
+        "position": [
+            0.0,
+            10.0,
+            0.0
+        ],
+        "direction": [
+            0.0,
+            -1.0,
+            0.0
+        ],
+        "ambient": [
+            0.2,
+            0.2,
+            0.2
+        ],
+        "diffuse": [
+            0.5,
+            0.5,
+            0.5
+        ],
+        "specular": [
+            1.0,
+            1.0,
+            1.0
+        ],
+        "type": 1,
+        "linear": 0.09,
+        "quadratic": 0.032,
+        "constant": 1.0,
+        "cutoff": 12.5,
+        "outerCutOff": 17.5
+    },
+    {
+        "UID": "light_002",
+        "filepath": "null",
+        "inverseMass": 0.0,
+        "initialAcceleration": 0.0,
+        "staticFlag": 1,
+        "position": [
+            5.0,
+            8.0,
+            5.0
+        ],
+        "direction": [
+            0.0,
+            -1.0,
+            0.0
+        ],
+        "ambient": [
+            0.1,
+            0.1,
+            0.1
+        ],
+        "diffuse": [
+            0.4,
+            0.4,
+            0.4
+        ],
+        "specular": [
+            0.8,
+            0.8,
+            0.8
+        ],
+        "type": 0,
+        "linear": 0.07,
+        "quadratic": 0.017,
+        "constant": 1.0,
+        "cutoff": 15.0,
+        "outerCutOff": 20.0
+    }
+]
