@@ -97,7 +97,7 @@ void ImposterBaker::captureView(const glm::vec3& treeCenter, float boundingRadiu
     bakeShader->setMat4("view", view);
     bakeShader->setMat4("projection", proj);
 
-    for (auto& mesh : model->instancedMeshes) {
+    for (auto& mesh : model->meshes) {
         mesh.render(bakeShader, TextureState::firstFreeTextureID);
     }
 

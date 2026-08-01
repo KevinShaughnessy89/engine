@@ -3,6 +3,7 @@
 #include "core/SystemKeyBinder.hpp"
 #include "entt-main/src/entt/entt.hpp"
 #include "rendering/KinematicController.hpp"
+#include "rendering/MovementController.hpp"
 
 
 class AudioManager;
@@ -35,6 +36,7 @@ class Core {
 
     KinematicController kinematicController;
     CharacterController characterController;
+    MovementController movementController;
     SystemKeyBinder systemKeyBinder;
 
     static TextureManager& Textures();

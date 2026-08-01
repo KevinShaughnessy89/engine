@@ -1,7 +1,10 @@
 #pragma once
 
+#include <string>
+
 #include "Material.hpp"
 #include "ModelType.hpp"
+#include "character/AnimationRenderer.hpp"
 #include "entt-main/src/entt/entt.hpp"
 #include "rendering/MeshStructs.hpp"
 #include "rendering/RenderLayer.hpp"
@@ -13,25 +16,33 @@ struct InstancedRenderable;
 class InstancedModel;
 class Texture;
 
+struct ModelData {
+    entt::entity entity;
+    std::string name;
+    GLuint shaderID;
+    std::string path;
+    ShaderType shaderType;
+    RenderLayer renderLayer;
+    ModelType modelType;
+    bool mergeSiblings = false;
+    std::vector<std::pair<std::string, std::string>> uniforms;
+    std::vector<std::pair<std::string, std::string>> animations;
+};
+
 class ModelLoader {
    public:
     ModelLoader();
     ~ModelLoader();
 
-    void create(const std::string& name, const std::string& path, ShaderType shaderType,
-                RenderLayer renderLayer, ModelType type, bool mergeSiblings = false);
+    void create(const std::string& name, ModelData& data);
     void loadScene(const std::string& path);
     Model* getModel(const std::string& name, int index = 0);
     InstancedModel* getInstancedModel(const std::string& name, int index = 0);
-    void createModel(std::unique_ptr<Model>& modelPtr, const aiScene* scene,
-                     const std::string& name, const std::string& path, GLuint shaderID,
-                     RenderLayer renderLayer, ModelType type);
-
-    void createInstancedModel(std::unique_ptr<InstancedModel>& instancedModelPtr,
-                              const aiScene* scene, const std::string& name,
-                              const std::string& path, GLuint shaderID, RenderLayer renderLayer,
-                              ModelType type);
-    void processAnimations(const aiScene* scene, const std::string& name);
+    void createModel(ModelData& data, std::unique_ptr<Model> modelPtr, const aiScene* scene,
+                     aiNode* node);
+    void createInstancedModel(ModelData& data, std::unique_ptr<InstancedModel> modelPtr,
+                              const aiScene* scene, aiNode* node);
+    void processAnimations(const ModelData& data);
     Renderable& getRenderable(const std::string& name, int index = 0);
     InstancedRenderable& getInstancedRenderable(const std::string& name, int index = 0);
     entt::entity getEntity(const std::string& name, int index = 0);
@@ -52,6 +63,11 @@ class ModelLoader {
     std::unordered_map<unsigned int, Texture*> embeddedTextures;
 
     std::vector<std::pair<std::string, std::string>> parseUniforms(const rapidjson::Value& value);
+
+    void finalizeModelEntity(ModelData& data, std::unique_ptr<Model> modelPtr,
+                             const aiScene* scene);
+    void finalizeModelEntity(ModelData& data, std::unique_ptr<InstancedModel> modelPtr,
+                             const aiScene* scene);
 
     void loadModel(Model* model);
     template <typename ModelT>

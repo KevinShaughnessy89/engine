@@ -20,17 +20,17 @@ static std::string stripMaximoBullshit(const std::string& name) {
     return pos == std::string::npos ? name : name.substr(pos + 1);
 }
 
-static std::string trimmedName(const std::string& name) {
+static std::string getAnimationName(const std::string& name) {
+    auto pos = name.find("::");
+    return pos == std::string::npos ? name : name.substr(pos + 1);
+}
+
+static std::string getModelName(const std::string& name) {
     auto pos = name.find("::");
     return pos == std::string::npos ? name : name.substr(0, pos);
 }
 
-static std::string trimmedClipName(const std::string& name) {
-    auto pos = name.find("::");
-    return pos == std::string::npos ? name : name.substr(pos + 2);
-}
-
-namespace AnimationBoneLoader {
+namespace AnimationModelLoader {
 
 inline std::vector<struct BoneWeightData> tempBoneData;
 inline std::unordered_map<std::string, int> boneNameToID;
@@ -63,7 +63,7 @@ inline glm::mat4 AssimpToGlm(const aiMatrix4x4 aiMatrix) {
 }
 
 inline void size(int numVertices) {
-    AnimationBoneLoader::numVertices = numVertices;
+    AnimationModelLoader::numVertices = numVertices;
     tempBoneData.resize(numVertices);
 }
 
@@ -142,19 +142,13 @@ inline void addBoneWeights(const aiMesh* mesh, std::vector<MeshVertex>& vertices
     }
 }
 
-inline std::vector<BoneInfo> processNode(const aiNode* node, int parentID) {
-    std::vector<BoneInfo> skeleton;
-    int boneID = -1;
+inline void processNode(const aiNode* node, int parentID, std::vector<BoneInfo>& skeleton) {
     std::string boneName = stripMaximoBullshit(node->mName.C_Str());
     auto it = boneNameToID.find(boneName);
     int currentParent = parentID;
 
-    if (skeleton.size() == 0) {
-        skeleton.resize(boneNameToID.size());
-    }
-
     if (it != boneNameToID.end()) {
-        boneID = it->second;
+        int boneID = it->second;
         skeleton[boneID].name = boneName;
         skeleton[boneID].ID = boneID;
         skeleton[boneID].parentID = parentID;
@@ -164,16 +158,19 @@ inline std::vector<BoneInfo> processNode(const aiNode* node, int parentID) {
     }
 
     for (unsigned int i = 0; i < node->mNumChildren; i++) {
-        std::vector<BoneInfo> childSkeleton = processNode(node->mChildren[i], currentParent);
-        skeleton.insert(skeleton.end(), childSkeleton.begin(), childSkeleton.end());
+        processNode(node->mChildren[i], currentParent, skeleton);
     }
+}
 
+inline std::vector<BoneInfo> buildSkeleton(const aiNode* rootNode) {
+    std::vector<BoneInfo> skeleton(boneNameToID.size());
+    processNode(rootNode, -1, skeleton);
     return skeleton;
 }
 
 inline AnimationClip loadClip(const aiAnimation* anim) {
     AnimationClip clip;
-    clip.name = trimmedClipName(anim->mName.C_Str());
+    clip.name = anim->mName.C_Str();
     clip.ticksPerSecond = (anim->mTicksPerSecond != 0) ? anim->mTicksPerSecond : 25.0f;
     clip.duration = anim->mDuration / clip.ticksPerSecond;  // convert ticks -> seconds
 
@@ -213,4 +210,4 @@ inline AnimationClip loadClip(const aiAnimation* anim) {
 
     return clip;
 }
-};  // namespace AnimationBoneLoader
+};  // namespace AnimationModelLoader

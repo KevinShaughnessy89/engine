@@ -2,7 +2,7 @@
 
 #include "CameraConstants.hpp"
 #include "CameraController.hpp"
-#include "components/rendering/CameraState.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "components/rendering/ChunkRenderable.hpp"
 #include "components/rendering/InstancedRenderable.hpp"
 #include "components/rendering/Renderable.hpp"
@@ -114,12 +114,12 @@ void computeLightSpaceMatrices() {
     lightSpaceMatrices.clear();
     lightProjections.clear();
 
-    CameraState& cam = CameraController::getCameraState(CameraController::activeCamera);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
     auto splits = computeCascadeSplits(ShadowState::shadowCascadeCount, DisplayState::nearPlane,
                                        ShadowState::shadowFarPlane, 0.3f);
 
     for (int i = 0; i < ShadowState::shadowCascadeCount; i++) {
-        glm::vec3 cameraPosition = cam.position;
+        glm::vec3 cameraPosition = view.position;
 
         // Fixed radius (this cascade's far split distance), independent of camera
         // orientation/FOV/aspect -- reconstructing it by inverting cascadeProj*viewMatrix
@@ -252,7 +252,7 @@ void renderShadowPass() {
             auto& renderable = instancedView.get<InstancedRenderable>(entity);
             if (renderable.layer == RenderLayer::Weather) continue;
 
-            for (auto& mesh : renderable.model->instancedMeshes) {
+            for (auto& mesh : renderable.model->meshes) {
                 mesh.render(instancedShadowShader, 0, /*bindTextures=*/false);
             }
         }

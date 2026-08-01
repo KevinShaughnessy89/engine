@@ -5,7 +5,6 @@
 #include "components/environment/SkyState.hpp"
 #include "components/physics/PhysicsComponents.hpp"
 #include "components/rendering/AnimationState.hpp"
-#include "components/rendering/CameraState.hpp"
 #include "components/rendering/SunState.hpp"
 #include "components/rendering/TerrainTreeImposter.hpp"
 #include "components/rendering/ViewState.hpp"
@@ -52,7 +51,6 @@ glm::mat4 calculateModelMatrix(entt::entity entity) {
 
 void updateUniforms(ShaderProgram* shader, entt::entity entity) {
     auto uniforms = shader->uniformLocationCache;
-    auto& camState = Registry.get<CameraState>(CameraController::activeCamera);
     auto& view = Registry.get<ViewState>(CameraController::activeCamera);
     auto& sunState = Registry.get<SunState>(ModelRegistry.getEntity("sun"));
 
@@ -72,7 +70,7 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity) {
         if (name == toCString(UniformName::View)) {
             updateUniform(
                 UniformData(UniformName::View,
-                            glm::lookAtRH(camState.position, camState.position + view.forward,
+                            glm::lookAtRH(view.position, view.position + view.forward,
                                           CameraConstants::WORLD_UP_AXIS)),
                 shader);
         }
@@ -81,7 +79,7 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity) {
                           shader);
         }
         if (name == toCString(UniformName::ViewPos)) {
-            updateUniform(UniformData(UniformName::ViewPos, camState.position), shader);
+            updateUniform(UniformData(UniformName::ViewPos, view.position), shader);
         }
         if (name == toCString(UniformName::ScreenWidth)) {
             updateUniform(UniformData(UniformName::ScreenWidth, DisplayState::screenWidth), shader);

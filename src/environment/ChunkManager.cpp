@@ -2,8 +2,8 @@
 
 #include <tracy/Tracy.hpp>
 
-#include "components/physics/KinematicBody.hpp"
 #include "components/rendering/ChunkRenderable.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Core.hpp"
 #include "core/Game.hpp"
 #include "entt-main/src/entt/entt.hpp"
@@ -140,9 +140,9 @@ void ChunkManager::update() {
 }
 void ChunkManager::lookAhead(int lookUpRadius) {
     ZoneScoped;
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
 
-    glm::vec3 cameraPosition = cameraBody.position;
+    glm::vec3 cameraPosition = view.position;
     glm::ivec2 initialGridCoords = GridHelper::worldToChunkIndex(cameraPosition);
 
     int tasksAdded = 0;
@@ -211,9 +211,9 @@ void ChunkManager::promoteChunkCollision(const glm::ivec2& gridCoords) {
 
 void ChunkManager::destructGrids() {
     ZoneScoped;
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
 
-    glm::vec3 cameraPosition = cameraBody.position;
+    glm::vec3 cameraPosition = view.position;
     glm::ivec2 initialGridCoords = GridHelper::worldToChunkIndex(cameraPosition);
 
     // Two hysteresis rings: collision demotes at 2 * lookUpRadius (chunk keeps rendering), the

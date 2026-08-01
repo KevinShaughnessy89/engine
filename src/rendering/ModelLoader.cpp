@@ -8,7 +8,6 @@
 
 #include "character/AnimationModelLoader.hpp"
 #include "character/AnimationRenderer.hpp"
-#include "components/rendering/AnimationRegistryComponent.hpp"
 #include "components/rendering/InstancedRenderable.hpp"
 #include "components/rendering/Renderable.hpp"
 #include "core/Config.hpp"
@@ -28,119 +27,6 @@ ModelLoader::ModelLoader() {
 }
 
 ModelLoader::~ModelLoader() = default;
-
-void ModelLoader::createModel(std::unique_ptr<Model>& modelPtr, const aiScene* scene,
-                              const std::string& name, const std::string& path, GLuint shaderID,
-                              RenderLayer renderLayer, ModelType type) {
-    for (unsigned int i = 0; i < scene->mRootNode->mNumChildren; i++) {
-        modelPtr->modelPath = path;
-        modelPtr->name = name;
-        modelPtr->directory = modelPtr->modelPath.substr(0, modelPtr->modelPath.find_last_of('/'));
-        auto& firstNode =
-            scene->mRootNode->mNumMeshes > 0
-                ? scene->mRootNode
-                : scene->mRootNode
-                      ->mChildren[i];  // not all files organize meshes under the root node,
-                                       // so we check if the root node has meshes first
-        materialCache.clear();
-        AnimationBoneLoader::clear();
-
-        processNode(modelPtr.get(), firstNode, scene);
-    }
-    if (!modelPtr->meshes.empty()) {
-        auto e = Registry.create();
-        Registry.emplace<Renderable>(e, modelPtr.get(), shaderID, renderLayer, true);
-        if (scene->mNumAnimations > 0) {
-            processAnimations(scene, name);
-            std::vector<BoneInfo> skeleton = AnimationBoneLoader::processNode(scene->mRootNode, -1);
-            Registry.emplace<AnimationRegistryComponent>(
-                e, &AnimationRenderer::registry[trimmedName(name)]);
-            Registry.emplace<SkeletonComponent>(e, skeleton);
-            Registry.emplace<AnimationState>(
-                e, AnimationRenderer::registry[trimmedName(name)].nameToID["Idle"]);
-        }
-        entities[name].push_back(e);
-
-        models.push_back(std::move(modelPtr));
-    }
-}
-
-void ModelLoader::createInstancedModel(std::unique_ptr<InstancedModel>& instancedModelPtr,
-                                       const aiScene* scene, const std::string& name,
-                                       const std::string& path, GLuint shaderID,
-                                       RenderLayer renderLayer, ModelType type) {
-    for (unsigned int i = 0; i < scene->mRootNode->mNumChildren; i++) {
-        instancedModelPtr->modelPath = path;
-        instancedModelPtr->name = name;
-        instancedModelPtr->directory =
-            instancedModelPtr->modelPath.substr(0, instancedModelPtr->modelPath.find_last_of('/'));
-        auto& firstNode =
-            scene->mRootNode->mNumMeshes > 0
-                ? scene->mRootNode
-                : scene->mRootNode->mChildren[i];  // not all files organize meshes
-                                                   // under the root node, so we check
-                                                   // if the root node has meshes first
-        materialCache.clear();
-        processNode(instancedModelPtr.get(), firstNode, scene);
-        // AnimationBoneLoader::processNode(scene->mRootNode, -1);
-    }
-    if (!instancedModelPtr->instancedMeshes.empty()) {
-        auto e = Registry.create();
-        Registry.emplace<InstancedRenderable>(e, instancedModelPtr.get(), shaderID, renderLayer,
-                                              true);
-        entities[name].push_back(e);
-
-        instancedModels.push_back(std::move(instancedModelPtr));
-    }
-}
-void ModelLoader::create(const std::string& name, const std::string& path, ShaderType shaderType,
-                         RenderLayer renderLayer, ModelType type, bool mergeSiblings) {
-    importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY,
-                              1.0f);  // target: 1 unit = 1 meter
-    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
-    const aiScene* scene = importer.ReadFile(
-        path.c_str(), aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_GlobalScale |
-                          aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
-    // Animation-only FBX exports have no meshes, which Assimp flags as an incomplete scene even
-    // though the import succeeded; only bail if there's neither mesh nor animation data.
-    if (!scene || !scene->mRootNode || (scene->mNumMeshes == 0 && scene->mNumAnimations == 0)) {
-        std::cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << std::endl;
-        std::cout << "Skipping scene entry \"" << name << "\" (" << path << ")" << std::endl;
-        return;
-    }
-
-    // PrintScene(scene, true);
-
-    embeddedTextures.clear();
-    if (path.size() >= 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {
-        loadEmbeddedTextures(scene);
-    }
-
-    GLuint shaderID = Display.getShaderIdFromShaderType(shaderType);
-
-    if (mergeSiblings) {
-        if (type == ModelType::Single) {
-            auto modelPtr = std::make_unique<Model>();
-            createModel(modelPtr, scene, name, path, shaderID, renderLayer, type);
-        }
-        if (type == ModelType::Instanced) {
-            auto instancedModelPtr = std::make_unique<InstancedModel>();
-            createInstancedModel(instancedModelPtr, scene, name, path, shaderID, renderLayer, type);
-        }
-    } else {
-        for (unsigned int i = 0; i < scene->mRootNode->mNumChildren; i++) {
-            if (type == ModelType::Single) {
-                auto modelPtr = std::make_unique<Model>();
-                createModel(modelPtr, scene, name, path, shaderID, renderLayer, type);
-            }
-            if (type == ModelType::Instanced) {
-                auto instancedModelPtr = std::make_unique<InstancedModel>();
-                createInstancedModel(instancedModelPtr, scene, name, path, shaderID, renderLayer,
-                                     type);
-            }
-        }
-    }
-}
 
 void ModelLoader::loadScene(const std::string& path) {
     std::ifstream file(path);
@@ -163,17 +49,35 @@ void ModelLoader::loadScene(const std::string& path) {
         const std::string name = it->name.GetString();
         const rapidjson::Value& entry = it->value;
 
-        std::string modelPath = Config::ProjectRootDir + entry["path"].GetString();
-        ShaderType shaderType = shaderTypeFromString(entry["shaderType"].GetString());
-        RenderLayer renderLayer = renderLayerFromString(entry["renderLayer"].GetString());
-        ModelType type = modelTypeFromString(entry["modelType"].GetString());
+        ModelData data;
+        data.name = name;
+        data.path = Config::ProjectRootDir + entry["path"].GetString();
+        data.shaderType = shaderTypeFromString(entry["shaderType"].GetString());
+        data.renderLayer = renderLayerFromString(entry["renderLayer"].GetString());
+        data.modelType = modelTypeFromString(entry["modelType"].GetString());
 
-        bool mergeSiblings = false;
         if (entry.HasMember("mergeSiblings") && entry["mergeSiblings"].GetBool()) {
-            mergeSiblings = entry["mergeSiblings"].GetBool();
+            data.mergeSiblings = entry["mergeSiblings"].GetBool();
         }
 
-        create(name, modelPath, shaderType, renderLayer, type, mergeSiblings);
+        if (entry.HasMember("uniforms")) {
+            data.uniforms = parseUniforms(entry["uniforms"]);
+        }
+
+        if (entry.HasMember("animations")) {
+            const rapidjson::Value& anims = entry["animations"];
+            for (auto animIt = anims.MemberBegin(); animIt != anims.MemberEnd(); animIt++) {
+                std::string animName = animIt->name.GetString();
+                std::string animPath = Config::ProjectRootDir + animIt->value.GetString();
+                data.animations.push_back(std::make_pair(animName, animPath));
+            }
+        }
+
+        create(name, data);
+
+        if (!data.animations.empty()) {
+            processAnimations(data);
+        }
     }
 }
 
@@ -184,6 +88,102 @@ std::vector<std::pair<std::string, std::string>> ModelLoader::parseUniforms(
         uniforms.emplace_back(it->name.GetString(), it->value.GetString());
     }
     return uniforms;
+}
+
+void ModelLoader::create(const std::string& name, ModelData& data) {
+    const std::string& path = data.path;
+    importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY,
+                              1.0f);  // target: 1 unit = 1 meter
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
+    const aiScene* scene = importer.ReadFile(
+        path.c_str(), aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_GlobalScale |
+                          aiProcess_FlipUVs | aiProcess_CalcTangentSpace);
+    // Animation-only FBX exports have no meshes, which Assimp flags as an incomplete scene even
+    // though the import succeeded; only bail if there's neither mesh nor animation data.
+    if (!scene || !scene->mRootNode || (scene->mNumMeshes == 0 && scene->mNumAnimations == 0)) {
+        std::cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << std::endl;
+        std::cout << "Skipping scene entry \"" << name << "\" (" << path << ")" << std::endl;
+        return;
+    }
+
+    // PrintScene(scene, true);
+
+    embeddedTextures.clear();
+    if (path.size() >= 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {
+        loadEmbeddedTextures(scene);
+    }
+
+    GLuint shaderID = Display.getShaderIdFromShaderType(data.shaderType);
+    data.shaderID = shaderID;
+
+    if (data.mergeSiblings) {
+        if (data.modelType == ModelType::Single) {
+            auto modelPtr = std::make_unique<Model>();
+            createModel(data, std::move(modelPtr), scene, scene->mRootNode);
+        }
+        if (data.modelType == ModelType::Instanced) {
+            auto instancedModelPtr = std::make_unique<InstancedModel>();
+            createInstancedModel(data, std::move(instancedModelPtr), scene, scene->mRootNode);
+        }
+    } else {
+        for (unsigned int i = 0; i < scene->mRootNode->mNumChildren; i++) {
+            aiNode* node = scene->mRootNode->mChildren[i];
+            if (data.modelType == ModelType::Single) {
+                auto modelPtr = std::make_unique<Model>();
+                createModel(data, std::move(modelPtr), scene, node);
+            }
+            if (data.modelType == ModelType::Instanced) {
+                auto instancedModelPtr = std::make_unique<InstancedModel>();
+                createInstancedModel(data, std::move(instancedModelPtr), scene, node);
+            }
+        }
+    }
+    return;
+}
+
+void ModelLoader::createModel(ModelData& data, std::unique_ptr<Model> modelPtr,
+                              const aiScene* scene, aiNode* node) {
+    modelPtr->modelPath = data.path;
+    modelPtr->name = data.name;
+    modelPtr->directory = modelPtr->modelPath.substr(0, modelPtr->modelPath.find_last_of('/'));
+    materialCache.clear();
+    AnimationModelLoader::clear();
+
+    processNode(modelPtr.get(), node, scene);
+
+    if (!modelPtr->meshes.empty()) {
+        auto e = Registry.create();
+        data.entity = e;
+        Registry.emplace<Renderable>(e, modelPtr.get(), data.shaderID, data.renderLayer, true);
+        std::vector<BoneInfo> skeleton = AnimationModelLoader::buildSkeleton(scene->mRootNode);
+        Registry.emplace<SkeletonComponent>(e, skeleton);
+
+        entities[data.name].push_back(e);
+
+        models.push_back(std::move(modelPtr));
+    }
+}
+
+void ModelLoader::createInstancedModel(ModelData& data, std::unique_ptr<InstancedModel> modelPtr,
+                                       const aiScene* scene, aiNode* node) {
+    modelPtr->modelPath = data.path;
+    modelPtr->name = data.name;
+    modelPtr->directory = data.path.substr(0, data.path.find_last_of('/'));
+    materialCache.clear();
+    processNode(modelPtr.get(), node, scene);
+
+    if (!modelPtr->meshes.empty()) {
+        auto e = Registry.create();
+        data.entity = e;
+        Registry.emplace<InstancedRenderable>(e, modelPtr.get(), data.shaderID, data.renderLayer,
+                                              true);
+        std::vector<BoneInfo> skeleton = AnimationModelLoader::buildSkeleton(scene->mRootNode);
+        Registry.emplace<SkeletonComponent>(e, skeleton);
+
+        entities[data.name].push_back(e);
+
+        instancedModels.push_back(std::move(modelPtr));
+    }
 }
 
 template <typename ModelT>
@@ -214,9 +214,9 @@ void ModelLoader::processMesh(ModelT* model, aiMesh* mesh, const aiScene* scene,
     std::vector<Texture*> textures;
 
     if (mesh->HasBones()) {
-        AnimationBoneLoader::prepareNewMesh();
-        AnimationBoneLoader::size(mesh->mNumVertices);
-        AnimationBoneLoader::populateAccumulator(mesh);
+        AnimationModelLoader::prepareNewMesh();
+        AnimationModelLoader::size(mesh->mNumVertices);
+        AnimationModelLoader::populateAccumulator(mesh);
     }
 
     for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
@@ -280,7 +280,7 @@ void ModelLoader::processMesh(ModelT* model, aiMesh* mesh, const aiScene* scene,
     }
 
     // Bones yo
-    if (mesh->HasBones()) AnimationBoneLoader::addBoneWeights(mesh, vertices);
+    if (mesh->HasBones()) AnimationModelLoader::addBoneWeights(mesh, vertices);
 
     aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
     aiString name;
@@ -340,7 +340,33 @@ void ModelLoader::createMesh(InstancedModel* model, std::vector<MeshVertex>& ver
     auto mesh = InstancedMesh(std::move(vertices), std::move(indices), std::move(textures));
     mesh.material = material;
     mesh.materialIndex = static_cast<int>(materialIndex);
-    model->instancedMeshes.push_back(std::move(mesh));
+    model->meshes.push_back(std::move(mesh));
+}
+
+void ModelLoader::processAnimations(const ModelData& data) {
+    auto& registryEntry = AnimationRenderer::registry[data.name];
+
+    for (const auto& [animName, animPath] : data.animations) {
+        auto* scene = importer.ReadFile(animPath.c_str(), aiProcess_GlobalScale);
+        if (!scene) {
+            std::cout << "ERROR::ASSIMP:: " << importer.GetErrorString() << std::endl;
+            std::cout << "Skipping animation \"" << animName << "\" (" << animPath << ")"
+                      << std::endl;
+            continue;
+        }
+        for (unsigned int i = 0; i < scene->mNumAnimations; i++) {
+            const aiAnimation* anim = scene->mAnimations[i];
+            std::cout << "Anim " << i << " raw name: '" << anim->mName.C_Str() << "'\n";
+            AnimationClip clip = AnimationModelLoader::loadClip(anim);
+            clip.name = animName;  // use the JSON key, not the FBX's internal track name
+            registryEntry.clips.push_back(clip);
+            registryEntry.nameToID[clip.name] = static_cast<int>(registryEntry.clips.size() - 1);
+        }
+    }
+
+    auto& animationState = Registry.emplace<AnimationState>(data.entity);
+    animationState.clips = registryEntry.clips;
+    animationState.nameToID = registryEntry.nameToID;
 }
 
 Material ModelLoader::extractMaterial(aiMaterial* material) {
@@ -407,18 +433,6 @@ std::vector<Texture*> ModelLoader::loadMaterialTextures(aiMaterial* mat, aiTextu
         if (texture != nullptr) textures.push_back(texture);
     }
     return textures;
-}
-
-void ModelLoader::processAnimations(const aiScene* scene, const std::string& name) {
-    auto& registryEntry = AnimationRenderer::registry[trimmedName(name)];
-    for (unsigned int i = 0; i < scene->mNumAnimations; i++) {
-        const aiAnimation* anim = scene->mAnimations[i];
-        std::cout << "Anim " << i << " raw name: '" << anim->mName.C_Str() << "'\n";
-        AnimationClip clip = AnimationBoneLoader::loadClip(anim);
-        registryEntry.clips.push_back(clip);
-        registryEntry.nameToID[trimmedClipName(clip.name)] =
-            static_cast<int>(registryEntry.clips.size() - 1);
-    }
 }
 
 void ModelLoader::loadEmbeddedTextures(const aiScene* scene) {
@@ -530,10 +544,6 @@ entt::entity ModelLoader::getEntity(const std::string& name, int index) {
     else
         throw("ERROR: no entity at key " + name + " index " + std::to_string(index) + "\n");
 }
-
-// Assimp's aiMetadata entries are variant-typed; this switches on the stored type
-// and prints accordingly. Needed because mMetaData->Get<T> requires knowing T up front,
-// but here we're iterating blind.
 
 void ModelLoader::PrintMetadataEntry(const aiMetadata* meta, unsigned i) {
     const std::string key = meta->mKeys[i].C_Str();

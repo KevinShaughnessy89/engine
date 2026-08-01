@@ -14,4 +14,9 @@ struct ViewState {
     glm::vec3 right{0.0f};
     glm::vec3 up{0.0f};
     glm::vec3 lookAt{0.0f};
+
+    glm::vec3 position{0.0f};
+    glm::vec3 deltaPos{0.0f};  // per-frame requested movement; written by MovementController,
+                               // consumed and reset by CameraController::update
+    float speed = 4000.f;
 };

@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "components/rendering/AnimationClip.hpp"
-#include "components/rendering/AnimationRegistryComponent.hpp"
 #include "components/rendering/AnimationState.hpp"
 #include "components/rendering/SkeletonComponent.hpp"
 #include "core/Core.hpp"
@@ -137,7 +136,7 @@ inline void computeSkinMatrices(const SkeletonComponent& skeleton, const Animati
 }
 
 inline void updateAnimationState(float deltaTime, GLuint ssbo) {
-    auto view = Registry.view<AnimationState, SkeletonComponent, AnimationRegistryComponent>();
+    auto view = Registry.view<AnimationState, SkeletonComponent>();
 
     std::vector<glm::mat4> allSkinMatrices(
         AnimationRenderer::MAX_BONES_PER_SKELETON * AnimationRenderer::MAX_ANIMATED_ENTITIES,
@@ -147,13 +146,11 @@ inline void updateAnimationState(float deltaTime, GLuint ssbo) {
     for (auto entity : view) {
         auto& animationState = view.get<AnimationState>(entity);
         auto& skeleton = view.get<SkeletonComponent>(entity);
-        auto& registryComponent = view.get<AnimationRegistryComponent>(entity);
 
         std::vector<glm::mat4> skinMatrices(skeleton.bones.size());
 
-        const AnimationClip& animationClip =
-            registryComponent.registry->clips[animationState.clipID];
-        animationState.currentTime += deltaTime * animationClip.ticksPerSecond;
+        const AnimationClip& animationClip = animationState.clips[animationState.clipID];
+        animationState.currentTime += deltaTime;
         animationState.currentTime = fmod(animationState.currentTime, animationClip.duration);
 
         animationState.skinSlot = entityIndex;

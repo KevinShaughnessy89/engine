@@ -211,7 +211,7 @@ void OcclusionMapGenerator::generateOcclusionMap() {
         GLState::applyState(renderable.layer, renderable.glStateFlags);
         UniformUpdater::updateUniforms(shader, entity);
 
-        for (auto& mesh : renderable.model->instancedMeshes) {
+        for (auto& mesh : renderable.model->meshes) {
             // Bind only the one sampler gbufferAlphaTest.frag/gbufferImposterAlphaTest.frag
             // declares (textureDiffuse/treeAtlasTexture) -- binding the mesh's full texture set
             // (e.g. textureNormal too) would cache bogus -1 locations for names these programs

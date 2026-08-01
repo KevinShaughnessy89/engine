@@ -11,28 +11,28 @@ InstancedModel::InstancedModel() {
 }
 
 InstancedModel::InstancedModel(std::vector<MeshVertex>&& vertices) {
-    instancedMeshes.emplace_back(std::move(vertices));
+    meshes.emplace_back(std::move(vertices));
 }
 
 InstancedModel::InstancedModel(std::vector<MeshVertex>&& vertices,
                                std::vector<unsigned int>&& indices) {
-    instancedMeshes.emplace_back(std::move(vertices), std::move(indices));
+    meshes.emplace_back(std::move(vertices), std::move(indices));
 }
 
 InstancedModel::InstancedModel(std::vector<MeshVertex>&& vertices,
                                std::vector<unsigned int>&& indices, Texture* texture) {
     std::vector<Texture*> textureVec = {texture};
-    instancedMeshes.emplace_back(std::move(vertices), std::move(indices), std::move(textureVec));
+    meshes.emplace_back(std::move(vertices), std::move(indices), std::move(textureVec));
 }
 
 InstancedModel::InstancedModel(std::vector<MeshVertex>&& vertices,
                                std::vector<unsigned int>&& indices,
                                std::vector<Texture*>&& textures) {
-    instancedMeshes.emplace_back(std::move(vertices), std::move(indices), std::move(textures));
+    meshes.emplace_back(std::move(vertices), std::move(indices), std::move(textures));
 }
 
 void InstancedModel::render(ShaderProgram* shader, int firstFreeTextureID) {
-    for (auto& mesh : instancedMeshes) {
+    for (auto& mesh : meshes) {
         mesh.render(shader, firstFreeTextureID);
     }
 }
@@ -57,7 +57,7 @@ GeometricData InstancedModel::calculateGeometricDataForMaterial(const std::strin
     geoData.min = glm::vec3(std::numeric_limits<float>::infinity());
     geoData.max = glm::vec3(-std::numeric_limits<float>::infinity());
 
-    for (const auto& mesh : instancedMeshes) {
+    for (const auto& mesh : meshes) {
         if (mesh.material != material) continue;
         for (const auto& vertex : mesh.vertices) {
             geoData.min = glm::min(geoData.min, glm::vec3(vertex.position));
@@ -69,11 +69,11 @@ GeometricData InstancedModel::calculateGeometricDataForMaterial(const std::strin
 }
 
 void InstancedModel::updateBufferData(std::vector<InstancedMeshVertex>&& bufferData) {
-    for (size_t i = 0; i < instancedMeshes.size(); i++) {
-        if (i + 1 == instancedMeshes.size()) {
-            instancedMeshes[i].instancedBufferData = std::move(bufferData);
+    for (size_t i = 0; i < meshes.size(); i++) {
+        if (i + 1 == meshes.size()) {
+            meshes[i].instancedBufferData = std::move(bufferData);
         } else {
-            instancedMeshes[i].instancedBufferData = bufferData;
+            meshes[i].instancedBufferData = bufferData;
         }
     }
 }
@@ -86,7 +86,7 @@ void InstancedModel::updateVisibleInstances(
     const std::vector<InstancedMeshVertex>& visibleInstances) {
     ZoneScoped;
     ZoneValue(visibleInstances.size());
-    for (auto& mesh : instancedMeshes) {
+    for (auto& mesh : meshes) {
         mesh.instancedBufferData = visibleInstances;
         mesh.uploadInstanceData();
     }
@@ -95,7 +95,7 @@ void InstancedModel::updateVisibleInstances(
 void InstancedModel::addTexture(std::string name, std::string uniform) {
     Texture* texture = Textures.getTexture(name);
     texture->setUniform(uniform);
-    for (auto& mesh : instancedMeshes) {
+    for (auto& mesh : meshes) {
         mesh.textures.push_back(texture);
     }
 }

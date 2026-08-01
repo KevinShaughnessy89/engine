@@ -9,7 +9,7 @@
 #include "HeightMapGenerator.hpp"
 #include "TerrainMeshGenerator.hpp"
 #include "TerrainMeshGeneratorStructs.hpp"
-#include "components/physics/KinematicBody.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Core.hpp"
 #include "entt-main/src/entt/entt.hpp"
 #include "environment/GridHelper.hpp"
@@ -49,8 +49,8 @@ void ChunkGenerationPipeline::runIfNeeded() {
 
     completeAttributeGenerationQueue();
 
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
-    glm::ivec2 gridCoords = GridHelper::worldToChunkIndex(cameraBody.position);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+    glm::ivec2 gridCoords = GridHelper::worldToChunkIndex(view.position);
 
     auto afterCameraLookup = clock::now();
 
@@ -146,8 +146,8 @@ void ChunkGenerationPipeline::processAttributeGenerationQueue() {
     ZoneScoped;
     if (attributeGenerationQueue.empty()) return;
 
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
-    glm::ivec2 center = GridHelper::worldToChunkIndex(cameraBody.position);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+    glm::ivec2 center = GridHelper::worldToChunkIndex(view.position);
     auto chebyshev = [&](const glm::ivec2& coords) {
         return std::max(std::abs(coords.x - center.x), std::abs(coords.y - center.y));
     };
@@ -197,8 +197,8 @@ void ChunkGenerationPipeline::completeAttributeGenerationQueue() {
     ZoneValue(attributeGenerationFutures.size());
     currentChunkIteration = 0;
 
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
-    glm::ivec2 center = GridHelper::worldToChunkIndex(cameraBody.position);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+    glm::ivec2 center = GridHelper::worldToChunkIndex(view.position);
 
     for (auto it = attributeGenerationFutures.begin(); it != attributeGenerationFutures.end();) {
         if (currentChunkIteration == maxChunksPerIteration) return;

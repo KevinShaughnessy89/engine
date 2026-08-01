@@ -21,8 +21,11 @@
 CandidateSet CollisionManager::getCandidates(const glm::vec3& position) {
     CandidateSet candidates;
 
-    candidates.triangleCandidates = Chunks.getTerrainAt(position)->getAdjacentTriangles(position);
-    candidates.dynamicCandidates = Chunks.getTerrainAt(position)->getAdjacentObjects(position);
+    CollisionShapeGrid* terrain = Chunks.getTerrainAt(position);
+    if (!terrain) return candidates;  // chunk at this position hasn't streamed in yet
+
+    candidates.triangleCandidates = terrain->getAdjacentTriangles(position);
+    candidates.dynamicCandidates = terrain->getAdjacentObjects(position);
 
     return candidates;
 }

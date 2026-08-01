@@ -3,9 +3,8 @@
 #include <glm/gtc/random.hpp>
 #include <tracy/Tracy.hpp>
 
-#include "components/physics/KinematicBody.hpp"
-#include "components/rendering/ViewState.hpp"
 #include "components/rendering/InstancedRenderable.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Config.hpp"
 #include "core/Core.hpp"
 #include "core/PrecompiledHeader.hpp"
@@ -54,8 +53,7 @@ InstancedModel* ParticleSystem::getModel() {
 Particle ParticleSystem::createParticle() {
     Particle p;
 
-    auto& cameraBody = CameraController::getKinematicBody(CameraController::activeCamera);
-    auto& cameraView = CameraController::getViewState(CameraController::activeCamera);
+    auto& cameraView = Registry.get<ViewState>(CameraController::activeCamera);
     // Generate a random position relative to the camera
     float radius = 25.0f;  // Adjust this value to change the spawn area size
     float height = 10.0f;  // Height above the camera
@@ -68,12 +66,11 @@ Particle ParticleSystem::createParticle() {
     glm::vec3 offset(radius * sin(phi) * cos(theta), height, radius * sin(phi) * sin(theta));
 
     // Transform offset to world space
-    glm::vec3 right =
-        glm::normalize(glm::cross(cameraView.forward, cameraView.forward));
+    glm::vec3 right = glm::normalize(glm::cross(cameraView.forward, cameraView.up));
     glm::mat3 cameraSpace(right, cameraView.up, -cameraView.forward);
     offset = cameraSpace * offset;
     // Set particle position
-    p.position = cameraBody.position + offset;
+    p.position = cameraView.position + offset;
     // Set a very small downward velocity
     p.velocity = glm::vec3(glm::linearRand(0.5f, 1.0f), -0.01f, glm::linearRand(0.5f, 1.0f));
 

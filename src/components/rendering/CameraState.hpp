@@ -1,11 +1,12 @@
 #pragma once
 
+#include "entt-main/src/entt/entt.hpp"
 #include "rendering/CameraMode.hpp"
 
-// Camera-controller bookkeeping only. Movement/collision state lives in KinematicBody, and
-// view/orientation state lives in ViewState -- both attached alongside this on the camera entity.
+// Camera-controller bookkeeping only. Position/movement/orientation state lives in ViewState,
+// attached alongside this on the camera entity.
 struct CameraState {
-    glm::vec3 position{0.0f};
     CameraMode cameraMode = CameraMode::FREE;
     bool modeChangedFlag = false;
+    entt::entity targetEntity = entt::null;  // followed in FIXED mode, e.g. CharacterController::activeCharacter
 };

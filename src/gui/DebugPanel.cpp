@@ -2,6 +2,10 @@
 
 #include <tracy/Tracy.hpp>
 
+#include "character/CharacterController.hpp"
+#include "components/physics/KinematicBody.hpp"
+#include "components/rendering/CameraState.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Core.hpp"
 #include "core/Game.hpp"
 #include "environment/ChunkManager.hpp"
@@ -379,11 +383,20 @@ void DebugPanel::renderDebugPanel() {
             ImGui::EndTabItem();
         }
         if (ImGui::BeginTabItem("Camera")) {
-            KinematicBody& camBody =
-                CameraController::getKinematicBody(CameraController::activeCamera);
-            ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camBody.position.x,
-                        camBody.position.y, camBody.position.z);
-            ImGui::DragFloat("Camera Speed", &camBody.speed, 1.0f, 0.0f, 2000.0f);
+            ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+            CameraState& camState = Registry.get<CameraState>(CameraController::activeCamera);
+            ImGui::Text("Camera Mode: %s",
+                       camState.cameraMode == CameraMode::FREE ? "FREE" : "FIXED");
+            ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", view.position.x, view.position.y,
+                        view.position.z);
+            ImGui::DragFloat("Camera Speed (FREE)", &view.speed, 1.0f, 0.0f, 2000.0f);
+
+            if (CharacterController::activeCharacter != entt::null) {
+                KinematicBody& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
+                ImGui::Text("Character Position: (%.2f, %.2f, %.2f)", body.position.x,
+                           body.position.y, body.position.z);
+                ImGui::DragFloat("Character Speed (FIXED)", &body.speed, 1.0f, 0.0f, 2000.0f);
+            }
 
             ImGui::Spacing();
             ImGui::Separator();

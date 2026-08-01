@@ -3,8 +3,8 @@
 #include "components/collision/ShapeData.hpp"
 
 // Movement/collision state for anything driven directly by input rather than force integration
-// (the camera in FIXED mode today, a player character later) -- position, grounding, and the
-// collider used to resolve against the world via KinematicResolver.
+// (the player character's body) -- position, grounding, and the collider used to resolve against
+// the world via KinematicResolver.
 struct KinematicBody {
     glm::vec3 position{0.0f};
     glm::vec3 previousPosition{0.0f};
@@ -12,7 +12,10 @@ struct KinematicBody {
     glm::vec3 velocity{0.0f};
     glm::vec3 acceleration{0.0f};
     glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 deltaMove{0.0f};  // accumulated input displacement; consumed and reset each update
+    float yaw = 0.0f;  // facing, independent of ViewState.yaw -- a body only turns, it doesn't
+                       // pitch; written by MovementController::setYaw in FIXED mode only
+    glm::vec3 deltaPos{0.0f};  // per-frame requested movement; written by MovementController,
+                               // consumed and reset by KinematicController::update
 
     float speed = 4000.f;
     float verticalVelocity = 0.0f;

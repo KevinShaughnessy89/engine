@@ -27,7 +27,7 @@ class InstancedModel {
                     -std::numeric_limits<float>::infinity(),
                     -std::numeric_limits<float>::infinity()};
 
-    std::vector<InstancedMesh> instancedMeshes;
+    std::vector<InstancedMesh> meshes;
     std::vector<Material> materials;
     void updateBufferData(std::vector<InstancedMeshVertex>&& bufferData);
     void render(ShaderProgram* shader, int firstFreeTextureID);
@@ -37,7 +37,7 @@ class InstancedModel {
     GeometricData calculateGeometricDataForMaterial(const std::string& material);
 
     // Full, unculled set of instance placements (e.g. every tree in the world). Renderer
-    // frustum-culls this each frame and pushes only the visible subset into instancedMeshes via
+    // frustum-culls this each frame and pushes only the visible subset into meshes via
     // updateVisibleInstances(), rather than submitting every instance to the GPU every frame.
     std::vector<InstancedMeshVertex> allInstances;
     void setInstances(std::vector<InstancedMeshVertex>&& instances);

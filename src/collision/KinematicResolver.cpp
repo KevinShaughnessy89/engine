@@ -44,8 +44,8 @@ ResolvedConstraint KinematicResolver::resolveCollisionConstraint(
     double deltaTime) {
     // groundClearance alone is a fixed-distance snap tolerance, so it only holds up at a steady
     // frame rate. A single slow/spiky frame can move the body - horizontally down a slope via
-    // deltaMove (speed * deltaTime), or vertically via gravity (verticalVelocity * deltaTime
-    // / 10, matching the integration in CameraController::Update) - further than that fixed
+    // deltaPos (speed * deltaTime), or vertically via gravity (verticalVelocity * deltaTime
+    // / 10, matching the integration in KinematicController::update) - further than that fixed
     // distance in one step, which flips isGrounded false for a frame and produces a stutter.
     // Padding the tolerance by this frame's worst-case movement keeps grounding stable regardless
     // of frame pacing.

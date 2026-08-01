@@ -7,6 +7,7 @@
 #include "Core.hpp"
 #include "FrameCounter.hpp"
 #include "audio/AudioManager.hpp"
+#include "character/CharacterController.hpp"
 #include "collision/CollisionManager.hpp"
 #include "components/collision/ShapeData.hpp"
 #include "components/environment/SkyState.hpp"
@@ -16,6 +17,7 @@
 #include "components/rendering/InstancedRenderable.hpp"
 #include "components/rendering/Renderable.hpp"
 #include "components/rendering/SunState.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/InputHandler.hpp"
 #include "core/KeyHandling.hpp"
 #include "core/ModuleManager.hpp"
@@ -266,11 +268,11 @@ bool Game::init() {
     });
 
     // EVENT HANDLING
-    Input.addKeyObserver(&systemCore->kinematicController);
+    Input.addKeyObserver(&systemCore->movementController);
     Input.addKeyObserver(&systemCore->systemKeyBinder);
     Input.addKeyObserver(&Projectiles);
     Input.addMouseObserver(&Projectiles);
-    Input.addMouseObserver(&systemCore->kinematicController);
+    Input.addMouseObserver(&systemCore->movementController);
 
     // ASSET MANAGEMENT
 
@@ -282,7 +284,6 @@ bool Game::init() {
     // Collision.initOctTree();
     //  m_ResourceManager.buildEnvironmentRegistry(m_EnvironmentManager);
     CameraController::init();
-    systemCore->kinematicController.activeKinematicBody = CameraController::activeCamera;
     Physics.init();
     // WINDOW AND CALLBACKS
     mainMenu.init(window);
@@ -312,6 +313,7 @@ bool Game::init() {
     // Environment.init() also depends on ModelRegistry.loadScene() having run, since it
     // attaches SunState/SkyState to the "sun"/"skybox" entities looked up there.
     Environment.init();
+    systemCore->characterController.init();
     Display.init();
 
     return true;
@@ -341,11 +343,7 @@ void Game::prewarmComponentStorage() {
     Registry.storage<InstancedRenderable>();
     Registry.storage<JustCreated>();
     Registry.storage<ChunkRenderable>();
-    // Registry.storage<AnimationState>();
-    // Registry.storage<AnimationRegistryComponent>();
-    // Registry.storage<SkeletonComponent>();
     Registry.storage<ViewState>();
-    // Registry.storage<AnimationClip>();
 }
 
 void Game::runMainMenu() {

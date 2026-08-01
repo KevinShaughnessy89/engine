@@ -5,7 +5,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "TextureManager.hpp"
-#include "components/physics/KinematicBody.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Config.hpp"
 #include "core/Core.hpp"
 #include "entt-main/src/entt/entt.hpp"
@@ -292,8 +292,8 @@ void ChunkModel::render(ShaderProgram* shader, GLuint firstFreeTextureId, bool i
         }
     }
 
-    KinematicBody& cameraBody = Registry.get<KinematicBody>(CameraController::activeCamera);
-    glm::vec3 cameraPosition = cameraBody.position;
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+    glm::vec3 cameraPosition = view.position;
 
     shader->setFloat("chunkWorldSize", static_cast<float>(TerrainConfig::gridSize));
     shader->setFloat("worldTexelSize", normalMapBuffer.texelSize);

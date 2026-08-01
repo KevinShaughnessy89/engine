@@ -6,7 +6,6 @@
 #include "collision/shapes/Sphere.hpp"
 #include "components/physics/JustCreated.hpp"
 #include "components/physics/PhysicsComponents.hpp"
-#include "components/physics/KinematicBody.hpp"
 #include "components/rendering/ViewState.hpp"
 #include "components/rendering/Renderable.hpp"
 #include "core/CommandBuffer.hpp"
@@ -38,12 +37,9 @@ void ProjectileManager::addProjectileAsset(const ProjectileAsset& projectile) {
 void ProjectileManager::fireProjectile() {
     for (const auto& projectileType : projectileTemplates)
         if (projectileType.UID == currentProjectileType) {
-            const auto& cameraBody =
-                CameraController::getKinematicBody(CameraController::activeCamera);
-            const auto& cameraView =
-                CameraController::getViewState(CameraController::activeCamera);
+            const auto& cameraView = Registry.get<ViewState>(CameraController::activeCamera);
 
-            const auto cameraPos = cameraBody.position;
+            const auto cameraPos = cameraView.position;
             const auto cameraForward = cameraView.forward;
 
             std::cout << "Projectile fired - Position: " << glm::to_string(cameraPos)

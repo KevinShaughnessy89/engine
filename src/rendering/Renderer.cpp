@@ -10,12 +10,11 @@
 #include "TextureState.hpp"
 #include "UniformUpdater.hpp"
 #include "character/AnimationRenderer.hpp"
-#include "components/rendering/CameraState.hpp"
-#include "components/rendering/ViewState.hpp"
 #include "components/rendering/ChunkRenderable.hpp"
 #include "components/rendering/InstanceLOD.hpp"
 #include "components/rendering/InstancedRenderable.hpp"
 #include "components/rendering/Renderable.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Core.hpp"
 #include "core/PrecompiledHeader.hpp"
 #include "entt-main/src/entt/entt.hpp"
@@ -209,14 +208,32 @@ void Renderer::cullInstances(InstancedRenderable& renderable, entt::entity entit
     }
 }
 
+namespace {
+// Model::min/max are in mesh-local space (raw import-time vertex extents), not world space, so
+// they must be transformed by the entity's own model matrix before being tested against
+// world-space frustum planes -- otherwise anything moved by a KinematicBody/Position (e.g. the
+// character walking away from the origin) gets culled using its bounds as if it never moved.
+void transformAABBToWorld(const glm::mat4& model, const glm::vec3& localMin,
+                          const glm::vec3& localMax, glm::vec3& outMin, glm::vec3& outMax) {
+    outMin = glm::vec3(std::numeric_limits<float>::infinity());
+    outMax = glm::vec3(-std::numeric_limits<float>::infinity());
+    for (int i = 0; i < 8; i++) {
+        glm::vec3 corner((i & 1) ? localMax.x : localMin.x, (i & 2) ? localMax.y : localMin.y,
+                         (i & 4) ? localMax.z : localMin.z);
+        glm::vec3 worldCorner = glm::vec3(model * glm::vec4(corner, 1.0f));
+        outMin = glm::min(outMin, worldCorner);
+        outMax = glm::max(outMax, worldCorner);
+    }
+}
+}  // namespace
+
 void Renderer::getBatches(
     std::unordered_map<RenderLayer, std::vector<entt::entity>>& batches,
     std::unordered_map<RenderLayer, std::vector<entt::entity>>& instancedBatches, bool shouldCull) {
     ZoneScoped;
     std::array<glm::vec4, 6> frustumPlanes = getFrustrumPlanes();
     FrustumXZBounds frustumXZBounds = getFrustumXZBounds();
-    glm::vec3 cameraPosition =
-        CameraController::getCameraState(CameraController::activeCamera).position;
+    glm::vec3 cameraPosition = Registry.get<ViewState>(CameraController::activeCamera).position;
 
     auto view1 = Registry.view<Renderable>();
     auto view2 = Registry.view<InstancedRenderable>();
@@ -357,7 +374,7 @@ void Renderer::renderBatches(double currentTime) {
                 UniformUpdater::updateTextureUniform(shader, entity);
 
                 GLState::applyState(currentBatch.layer, renderData.glStateFlags);
-                for (auto& mesh : renderData.model->instancedMeshes) {
+                for (auto& mesh : renderData.model->meshes) {
                     UniformUpdater::updateNormalMapUniform(shader, mesh);
                     UniformUpdater::updateAlphaMapUniform(shader, mesh);
                     if (mesh.hasAlphaMap) {
@@ -570,11 +587,10 @@ bool Renderer::shouldFrustrumCull(const std::array<glm::vec4, 6>& frustumPlanes,
 }
 
 std::array<glm::vec4, 6> Renderer::getFrustrumPlanes() {
-    CameraState& camState = CameraController::getCameraState(CameraController::activeCamera);
-    ViewState& view = CameraController::getViewState(CameraController::activeCamera);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
 
-    glm::mat4 viewMatrix = glm::lookAtRH(camState.position, camState.position + view.forward,
-                                         CameraConstants::WORLD_UP_AXIS);
+    glm::mat4 viewMatrix =
+        glm::lookAtRH(view.position, view.position + view.forward, CameraConstants::WORLD_UP_AXIS);
 
     glm::mat4 vp = DisplayState::perspectiveMatrix * viewMatrix;
 
@@ -595,11 +611,10 @@ std::array<glm::vec4, 6> Renderer::getFrustrumPlanes() {
 }
 
 std::array<glm::vec3, 8> Renderer::getFrustumCornersWorldSpace() {
-    CameraState& camState = CameraController::getCameraState(CameraController::activeCamera);
-    ViewState& view = CameraController::getViewState(CameraController::activeCamera);
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
 
-    glm::mat4 viewMatrix = glm::lookAtRH(camState.position, camState.position + view.forward,
-                                         CameraConstants::WORLD_UP_AXIS);
+    glm::mat4 viewMatrix =
+        glm::lookAtRH(view.position, view.position + view.forward, CameraConstants::WORLD_UP_AXIS);
 
     // Build corners from the projection's near/far tangent extents and rotate them into world
     // space via inverse(view) alone, rather than inverting the full view-projection matrix.
@@ -658,8 +673,8 @@ bool Renderer::aabbOutsidePlane(const glm::vec4& plane, const glm::vec3& min,
 }
 
 bool Renderer::shouldOccludeCull(const glm::vec3& targetPoint) {
-    CameraState& camState = CameraController::getCameraState(CameraController::activeCamera);
-    glm::vec3 cameraPosition = camState.position;
+    ViewState& view = Registry.get<ViewState>(CameraController::activeCamera);
+    glm::vec3 cameraPosition = view.position;
     int numSamples = 8;
     glm::vec3 toChunk = targetPoint - cameraPosition;
 
