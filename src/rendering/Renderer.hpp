@@ -47,7 +47,7 @@ class Renderer {
         {RenderLayer::Weather, ShaderType::Particle},
     };
 
-    void renderBatches(double currentTime);
+    void renderBatches(double deltaTime);
 
     ShaderProgram* useShader(ShaderType shaderType);
 
@@ -69,6 +69,9 @@ class Renderer {
     std::vector<InstancedMeshVertex> visibleInstancesScratch;
     void initializeQuad();
     void drawQuad();
+    void initializeAxisLines();
+    void drawAxisLines(ShaderProgram* shader);
+    GLuint axisVAO, axisVBO;
     void renderWithBlur();
     void combine();
     void blur();

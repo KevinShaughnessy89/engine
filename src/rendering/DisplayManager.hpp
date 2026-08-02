@@ -42,7 +42,7 @@ class DisplayManager {
     ShaderProgram* getIrradianceShader() { return irradianceShader; }
     ComputeShader* getNormalMapShader() { return normalMapShader; }
     void init();
-    void render(double currentTime);
+    void render(double deltaTime);
     void setAspectValues(float frameBufferWidth, float frameBufferHeight);
     void setOrthographicProjection();
     void setPerspectiveProjection();

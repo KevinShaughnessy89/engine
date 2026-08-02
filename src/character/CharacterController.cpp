@@ -15,13 +15,14 @@ void CharacterController::setActiveCharacter(entt::entity character) {
 void CharacterController::update(float deltaTime) {
     auto [body, animationState] = Registry.get<KinematicBody, AnimationState>(activeCharacter);
 
-    if (body.isGrounded && glm::length(glm::vec2(body.velocity.x, body.velocity.z)) > 0.1f) {
+    if (body.isGrounded && body.movementIntent > 0.0f) {
         animationState.clipID = animationState.nameToID["Walk"];
         animationState.looping = true;
     } else {
         animationState.clipID = animationState.nameToID["Idle"];
         animationState.looping = true;
     }
+    body.movementIntent = 0.0f;
 }
 
 void CharacterController::createNewCharacter(const std::string& name) {
@@ -35,4 +36,6 @@ void CharacterController::createNewCharacter(const std::string& name) {
 
 void CharacterController::init() {
     createNewCharacter("Character");
+    auto& kinematicBody = Registry.get<KinematicBody>(activeCharacter);
+    kinematicBody.position = glm::vec3(0.0f, 10.0f, 0.0f);
 }

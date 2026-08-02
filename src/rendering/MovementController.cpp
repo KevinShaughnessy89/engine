@@ -96,37 +96,25 @@ void MovementController::setYaw(float radians) {
     delta = glm::clamp(delta, -CameraConstants::maxYawRate, CameraConstants::maxYawRate);
     view.yaw += delta;
     view.yaw = movementWrapAngle(view.yaw);
-
-    auto& camState = Registry.get<CameraState>(CameraController::activeCamera);
-    auto& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
-    body.yaw = movementWrapAngle(body.yaw + delta);
-    body.orientation = glm::angleAxis(body.yaw, CameraConstants::WORLD_UP_AXIS);
 }
 
-// Character movement is always "grounded": flattened to the XZ plane, falling back to the last
-// valid direction when looking straight up/down would otherwise zero it out.
-glm::vec3 MovementController::resolveGroundedDirection(const glm::vec3& flattened) {
-    glm::vec3 mv = flattened;
-    if (glm::length(mv) > 0.001f) {
-        mv = glm::normalize(mv);
-        lastValidMovementDirection = mv;
-    } else {
-        mv = lastValidMovementDirection;
-    }
-    return mv;
-}
+// Small sentinel written (not accumulated) whenever a grounded move* fires this frame -- gates
+// Walk vs Idle clip selection in CharacterController::update without float-precision pitfalls
+// from comparing an accumulated value against zero.
+constexpr float movementIntentEpsilon = 0.01f;
 
 // WASD drives exactly one thing depending on mode: the free camera in FREE, or the character's
-// body in FIXED -- never both, so the unattended one doesn't drift off on its own.
-void MovementController::applyMovement(const glm::vec3& freeVector, const glm::vec3& groundedVector,
-                                       double deltaTime) {
+// body in FIXED -- never both, so the unattended one doesn't drift off on its own. In FIXED,
+// position itself now comes entirely from the animation clip's root motion (see
+// KinematicController::updateBody), so WASD only signals movement intent for clip selection.
+void MovementController::applyMovement(const glm::vec3& freeVector, double deltaTime) {
     auto& camState = Registry.get<CameraState>(CameraController::activeCamera);
     if (camState.cameraMode == CameraMode::FREE) {
         auto& view = Registry.get<ViewState>(CameraController::activeCamera);
         view.deltaPos += freeVector * view.speed * (float)deltaTime;
     } else {
         auto& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
-        body.deltaPos += groundedVector * body.speed * (float)deltaTime;
+        body.movementIntent = movementIntentEpsilon;
     }
 }
 
@@ -134,16 +122,14 @@ void MovementController::moveForward(double deltaTime) {
     auto& view = Registry.get<ViewState>(CameraController::activeCamera);
     glm::vec3 forward =
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_FORWARD_AXIS));
-    glm::vec3 flattened(forward.x, 0.0f, forward.z);
-    applyMovement(forward, resolveGroundedDirection(flattened), deltaTime);
+    applyMovement(forward, deltaTime);
 }
 
 void MovementController::moveBackward(double deltaTime) {
     auto& view = Registry.get<ViewState>(CameraController::activeCamera);
     glm::vec3 forward =
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_FORWARD_AXIS));
-    glm::vec3 flattened(forward.x, 0.0f, forward.z);
-    applyMovement(-forward, -resolveGroundedDirection(flattened), deltaTime);
+    applyMovement(-forward, deltaTime);
 }
 
 void MovementController::moveRight(double deltaTime) {
@@ -154,8 +140,7 @@ void MovementController::moveRight(double deltaTime) {
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_RIGHT_AXIS));
     glm::vec3 up = glm::normalize(glm::cross(right, forward));
     glm::vec3 freeVector = glm::cross(forward, up);
-    glm::vec3 groundedVector = glm::cross(forward, glm::vec3(up.x, 0.0f, up.z));
-    applyMovement(freeVector, resolveGroundedDirection(groundedVector), deltaTime);
+    applyMovement(freeVector, deltaTime);
 }
 
 void MovementController::moveLeft(double deltaTime) {
@@ -166,6 +151,5 @@ void MovementController::moveLeft(double deltaTime) {
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_RIGHT_AXIS));
     glm::vec3 up = glm::normalize(glm::cross(right, forward));
     glm::vec3 freeVector = glm::cross(forward, up);
-    glm::vec3 groundedVector = glm::cross(forward, glm::vec3(up.x, 0.0f, up.z));
-    applyMovement(-freeVector, -resolveGroundedDirection(groundedVector), deltaTime);
+    applyMovement(-freeVector, deltaTime);
 }

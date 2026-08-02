@@ -195,6 +195,8 @@ void DebugPanel::renderDebugPanel() {
 
     if (ImGui::BeginTabBar("DebugTabs")) {
         if (ImGui::BeginTabItem("Rendering")) {
+            ImGui::Checkbox("Axis Gizmo", &DebugState::showAxisGizmo);
+
             ImGui::PushID("All");
             if (ImGui::CollapsingHeader("All")) {
                 if (ImGui::Checkbox("Wireframe", &DebugState::allState.wireframe)) {

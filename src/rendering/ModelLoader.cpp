@@ -60,6 +60,10 @@ void ModelLoader::loadScene(const std::string& path) {
             data.mergeSiblings = entry["mergeSiblings"].GetBool();
         }
 
+        if (entry.HasMember("forwardOffsetDegrees")) {
+            data.forwardOffsetDegrees = entry["forwardOffsetDegrees"].GetFloat();
+        }
+
         if (entry.HasMember("uniforms")) {
             data.uniforms = parseUniforms(entry["uniforms"]);
         }
@@ -154,10 +158,19 @@ void ModelLoader::createModel(ModelData& data, std::unique_ptr<Model> modelPtr,
     if (!modelPtr->meshes.empty()) {
         auto e = Registry.create();
         data.entity = e;
-        Registry.emplace<Renderable>(e, modelPtr.get(), data.shaderID, data.renderLayer, true);
+        Registry.emplace<Renderable>(e, modelPtr.get(), data.shaderID, data.renderLayer, true,
+                                     data.forwardOffsetDegrees);
         std::vector<BoneInfo> skeleton = AnimationModelLoader::buildSkeleton(scene->mRootNode);
-        Registry.emplace<SkeletonComponent>(e, skeleton);
+        std::vector<glm::mat4> animatedTransforms(skeleton.size());
+        auto& skeletonComponent = Registry.emplace<SkeletonComponent>(
+            e, std::move(skeleton), std::move(animatedTransforms));
 
+        for (const auto& bone : skeletonComponent.bones) {
+            if (bone.parentID == -1) {
+                skeletonComponent.parentBoneID = bone.ID;
+                break;
+            }
+        }
         entities[data.name].push_back(e);
 
         models.push_back(std::move(modelPtr));
@@ -178,7 +191,8 @@ void ModelLoader::createInstancedModel(ModelData& data, std::unique_ptr<Instance
         Registry.emplace<InstancedRenderable>(e, modelPtr.get(), data.shaderID, data.renderLayer,
                                               true);
         std::vector<BoneInfo> skeleton = AnimationModelLoader::buildSkeleton(scene->mRootNode);
-        Registry.emplace<SkeletonComponent>(e, skeleton);
+        std::vector<glm::mat4> animatedTransforms(skeleton.size());
+        Registry.emplace<SkeletonComponent>(e, std::move(skeleton), std::move(animatedTransforms));
 
         entities[data.name].push_back(e);
 

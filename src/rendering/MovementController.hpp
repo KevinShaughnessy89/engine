@@ -27,13 +27,10 @@ class MovementController : public KeyObserver, public MouseObserver {
     void setYaw(float radians);
     void setPitch(float radians);
 
-    glm::vec3 lastValidMovementDirection{0.0f};
     bool firstMouse = true;
 
    private:
     void insertCallbackFunction(int key, void (MovementController::*function)(double));
     void setMovementKeyBindings();
-    void applyMovement(const glm::vec3& freeVector, const glm::vec3& groundedVector,
-                       double deltaTime);
-    glm::vec3 resolveGroundedDirection(const glm::vec3& flattened);
+    void applyMovement(const glm::vec3& freeVector, double deltaTime);
 };

@@ -16,13 +16,15 @@ struct KinematicBody {
                        // pitch; written by MovementController::setYaw in FIXED mode only
     glm::vec3 deltaPos{0.0f};  // per-frame requested movement; written by MovementController,
                                // consumed and reset by KinematicController::update
+    float movementIntent = 0.0f;  // set by MovementController::applyMovement, gates Walk vs Idle
+                                   // selection; consumed and reset by CharacterController::update
 
-    float speed = 4000.f;
+    float speed = 4000.0f;
     float verticalVelocity = 0.0f;
     bool isGrounded = false;
     bool wasGrounded = false;
-    float groundClearance = 20.75f;  // minimum clearance needed to clear steep slopes without
-                                     // losing grounding
+    float groundClearance = 0.0f;  // minimum clearance needed to clear steep slopes without
+                                   // losing grounding
 
     SphereData collisionSphere;
 

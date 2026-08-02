@@ -37,7 +37,7 @@ uniform float ambientStrength;
 
 vec3 lightDir = normalize(sunPosition);
 
-float tileScale = 4.0;
+float tileScale = 128.0;
 // Continuous (non-atlas) world-space tiling coordinate for the repeating detail textures --
 // deliberately NOT chunk-relative like teAtlasUV, so the tiling pattern doesn't reset/seam at
 // chunk borders. Matches the uniform terrain.tese and compute.comp use for chunk sizing.

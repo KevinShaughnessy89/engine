@@ -434,7 +434,7 @@ void Game::updateMainThread(double deltaTime, double currentTime) {
             }
             {
                 ZoneScopedN("updateMainThread: Display.render");
-                Display.render(currentTime);
+                Display.render(deltaTime);
             }
             {
                 ZoneScopedN("updateMainThread: Registry.clear<JustCreated>");

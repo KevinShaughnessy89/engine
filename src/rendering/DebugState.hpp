@@ -34,6 +34,9 @@ inline LayerDebugState allState;
 inline bool showFpsOverlay = false;
 inline float currentFPS = 0.0f;
 
+// Rendering tab: toggles Renderer::drawAxisLines()'s world-origin XYZ gizmo.
+inline bool showAxisGizmo = false;
+
 // Sky tab: while true, Game::updateWorldState() skips SunHelper::updateSunState() so the
 // per-frame sun simulation doesn't stomp the debug panel's manual SunState edits (and so
 // DebugPanel's cached "original" values have something stable to Revert to). Set the first time

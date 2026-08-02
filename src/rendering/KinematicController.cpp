@@ -7,25 +7,45 @@
 #include "collision/CollisionManager.hpp"
 #include "collision/KinematicResolver.hpp"
 #include "collision/ResolvedConstraint.hpp"
-#include "collision/shapes/ColliderFactory.hpp"
 #include "components/collision/ShapeData.hpp"
 #include "components/physics/KinematicBody.hpp"
+#include "components/rendering/CameraState.hpp"
+#include "components/rendering/Renderable.hpp"
+#include "components/rendering/SkeletonComponent.hpp"
+#include "components/rendering/ViewState.hpp"
 #include "core/Core.hpp"
-#include "core/PrecompiledHeader.hpp"
 #include "entt-main/src/entt/entt.hpp"
-
+#include "rendering/CameraConstants.hpp"
+#include "rendering/CameraController.hpp"
+#include "rendering/CameraMode.hpp"
 // Gravity, grounding, collision resolution, and the velocity/collider bookkeeping derived from
 // the resolved position, for every KinematicBody in the registry. Facing (yaw) is written
 // directly by MovementController, not synced from anywhere here.
 void KinematicController::update(double deltaTime) {
     for (auto entity : Registry.view<KinematicBody>()) {
-        updateBody(Registry.get<KinematicBody>(entity), deltaTime);
+        updateBody(entity, deltaTime);
     }
 }
 
-void KinematicController::updateBody(KinematicBody& body, double deltaTime) {
+void KinematicController::updateBody(entt::entity entity, double deltaTime) {
+    auto& body = Registry.get<KinematicBody>(entity);
+    auto& skeleton = Registry.get<SkeletonComponent>(entity);
+
     float stopThreshold = 0.01f;
     float lerpFactor = 150.f;
+
+    auto& view = Registry.get<ViewState>(CameraController::activeCamera);
+    auto& cameraState = Registry.get<CameraState>(CameraController::activeCamera);
+
+    // Fold this frame's root motion (local-space, accumulated by AnimationRenderer) into deltaPos
+    // as a world-space offset, same contract MovementController uses for input-driven movement.
+    glm::mat4 R = glm::mat4_cast(body.orientation);
+    if (auto* renderable = Registry.try_get<Renderable>(entity)) {
+        R = R * glm::rotate(glm::mat4(1.0f), glm::radians(renderable->forwardOffsetDegrees),
+                            CameraConstants::WORLD_UP_AXIS);
+    }
+    body.deltaPos += glm::vec3(R * glm::vec4(skeleton.pendingRootMotion, 0.0f));
+    skeleton.pendingRootMotion = glm::vec3(0.0f);
 
     if (!body.isGrounded) {
         body.wasGrounded = false;
@@ -69,6 +89,11 @@ void KinematicController::updateBody(KinematicBody& body, double deltaTime) {
 
     body.velocity = (body.position - body.previousPosition) / float(deltaTime);
     body.collisionSphere.currentCenter = body.position;
+    if (cameraState.cameraMode == CameraMode::FIXED) {
+        body.orientation =
+            glm::quatLookAt(glm::normalize(glm::vec3(view.forward.x, 0.0f, view.forward.z)),
+                            CameraConstants::WORLD_UP_AXIS);
+    }
     if (body.previousPosition != body.position) body.previousPosition = body.position;
     body.deltaPos = glm::vec3(0.0f);
 }

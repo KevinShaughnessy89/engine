@@ -25,6 +25,7 @@ struct ModelData {
     RenderLayer renderLayer;
     ModelType modelType;
     bool mergeSiblings = false;
+    float forwardOffsetDegrees = 0.0f;
     std::vector<std::pair<std::string, std::string>> uniforms;
     std::vector<std::pair<std::string, std::string>> animations;
 };

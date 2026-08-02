@@ -1,6 +1,6 @@
 #pragma once
 
-#include "CameraConstants.hpp"
+#include "entt-main/src/entt/entt.hpp"
 
 struct KinematicBody;
 
@@ -14,5 +14,5 @@ class KinematicController {
     void update(double deltaTime);
 
    private:
-    void updateBody(KinematicBody& body, double deltaTime);
+    void updateBody(entt::entity entity, double deltaTime);
 };

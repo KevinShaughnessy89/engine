@@ -32,6 +32,7 @@
 void Renderer::init() {
     initializeFramebuffer();
     initializeQuad();
+    initializeAxisLines();
     ShadowMapGenerator::init();
     OcclusionMapGenerator::init();
     imageBasedLighting.init();
@@ -247,9 +248,12 @@ void Renderer::getBatches(
             // model's own static geometry
             if (t.layer == RenderLayer::Sun || t.layer == RenderLayer::Skybox) {
                 t.shouldRender = true;
-            } else if (shouldCull && shouldFrustrumCull(frustumPlanes, t.model->getMinCoordinates(),
-                                                        t.model->getMaxCoordinates())) {
-                t.shouldRender = false;
+            } else if (shouldCull) {
+                glm::vec3 worldMin, worldMax;
+                transformAABBToWorld(UniformUpdater::calculateModelMatrix(entity),
+                                     t.model->getMinCoordinates(), t.model->getMaxCoordinates(),
+                                     worldMin, worldMax);
+                t.shouldRender = !shouldFrustrumCull(frustumPlanes, worldMin, worldMax);
             } else {
                 t.shouldRender = true;
             }
@@ -298,7 +302,7 @@ void Renderer::getBatches(
     }
 }
 
-void Renderer::renderBatches(double currentTime) {
+void Renderer::renderBatches(double deltaTime) {
     ZoneScoped;
 
     std::unordered_map<RenderLayer, std::vector<entt::entity>> batches;
@@ -341,7 +345,7 @@ void Renderer::renderBatches(double currentTime) {
         ShaderProgram* shader = useShader(currentBatch.shaderType);
 
         if (currentBatch.layer == RenderLayer::Animated) {
-            AnimationRenderer::updateAnimationState(currentTime, boneSSBO);
+            AnimationRenderer::updateAnimationState(deltaTime, boneSSBO);
         }
 
         for (auto entity : renderableEntities) {
@@ -389,6 +393,14 @@ void Renderer::renderBatches(double currentTime) {
                 }
             }
         }
+
+        if (currentBatch.layer == RenderLayer::Objects && DebugState::showAxisGizmo) {
+            auto& view = Registry.get<ViewState>(CameraController::activeCamera);
+            shader->setMat4("view", glm::lookAtRH(view.position, view.position + view.forward,
+                                                  CameraConstants::WORLD_UP_AXIS));
+            shader->setMat4("projection", DisplayState::perspectiveMatrix);
+            drawAxisLines(shader);
+        }
     }
     {
         ZoneScopedN("renderBatches: blur");
@@ -426,6 +438,54 @@ void Renderer::drawQuad() {
     glBindVertexArray(quadVAO);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+}
+
+// World-space X/Y/Z gizmo through the origin, reusing modelShader (model.vert's normal/texCoord
+// attributes are just zeroed -- harmless, since model.frag no longer reads them) so drawing it
+// costs a VAO swap and no shader/program switch.
+void Renderer::initializeAxisLines() {
+    float axisLength = 500.0f;
+    float axisVertices[] = {
+        // position (vec4)             normal (vec3)      texCoords (vec2)
+        -axisLength, 0.0f,        0.0f,        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        axisLength,  0.0f,        0.0f,        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+
+        0.0f,        -axisLength, 0.0f,        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f,        axisLength,  0.0f,        1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+
+        0.0f,        0.0f,        -axisLength, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f,        0.0f,        axisLength,  1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    };
+
+    glGenVertexArrays(1, &axisVAO);
+    glGenBuffers(1, &axisVBO);
+
+    glBindVertexArray(axisVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, axisVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(axisVertices), axisVertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(4 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(7 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0);
+}
+
+void Renderer::drawAxisLines(ShaderProgram* shader) {
+    shader->setMat4("model", glm::mat4(1.0f));
+    glBindVertexArray(axisVAO);
+
+    shader->setVec3("tint", glm::vec3(1.0f, 0.0f, 0.0f));
+    glDrawArrays(GL_LINES, 0, 2);
+    shader->setVec3("tint", glm::vec3(0.0f, 1.0f, 0.0f));
+    glDrawArrays(GL_LINES, 2, 2);
+    shader->setVec3("tint", glm::vec3(0.0f, 0.0f, 1.0f));
+    glDrawArrays(GL_LINES, 4, 2);
+
     glBindVertexArray(0);
 }
 

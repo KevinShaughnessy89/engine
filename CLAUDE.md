@@ -41,6 +41,8 @@ build` from that directory. `infer()` is currently a stub that always returns 0.
 Formatting: `.clang-format` (Google base style, 4-space indent, 100 col, left-aligned pointers).
 Comments: keep them to a single line — prefer one line over a multi-line block, even when it means
 trimming down the explanation.
+Naming: no Hungarian-style `k` prefix for constants (e.g. `kMaxBones`) — doesn't match this
+codebase's established style. Use plain camelCase (e.g. `maxBones`).
 
 ## Tooling notes
 

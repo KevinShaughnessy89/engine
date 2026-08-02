@@ -101,37 +101,51 @@ inline glm::mat4 sampleChannel(const AnimationChannel& channel, float time) {
     return T * R * S;
 }
 
-inline void computeSkinMatrices(const SkeletonComponent& skeleton, const AnimationClip& clip,
-                                const AnimationState& animationState,
+inline void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
+                                const AnimationState& animationState, bool clipLooped,
                                 std::span<glm::mat4> skinMatrices) {
     const int numBones = skeleton.bones.size();
 
-    // Scratch space for this entity's global animated transforms.
-    // Reuse a thread_local or pre-sized member buffer in real code to avoid
-    // a per-entity per-frame heap allocation.
-    std::vector<glm::mat4> G_anim(numBones);
+    std::vector<glm::mat4>& M_anim = skeleton.animatedTransforms;
 
     for (int i = 0; i < numBones; i++) {
         const BoneInfo& bone = skeleton.bones[i];
 
-        glm::mat4 M_anim;
         // expensive, in the future map to channel indices instead of searching by name each frame
         auto channelIt = clip.channels.find(bone.name);
         if (channelIt != clip.channels.end()) {
-            M_anim = sampleChannel(channelIt->second, animationState.currentTime);
+            M_anim[i] = sampleChannel(channelIt->second, animationState.currentTime);
         } else {
-            M_anim = bone.localBindTransform;
-        }
-
-        if (bone.parentID == -1) {
-            G_anim[i] = M_anim;
-        } else {
-            G_anim[i] = G_anim[bone.parentID] * M_anim;
+            M_anim[i] = bone.localBindTransform;
         }
     }
 
+    // Root motion: fold the root bone's clip-space translation into a world-space delta
+    // (consumed by KinematicController::updateBody) instead of letting it move the mesh in
+    // place, so the character's position, not just its skin, tracks the clip.
+    const int rootID = skeleton.parentBoneID;
+    if (rootID != -1) {
+        glm::vec3 currentTranslation = glm::vec3(M_anim[rootID][3]);
+        bool resync = clipLooped || skeleton.previousRootClipID != animationState.clipID;
+        if (!resync) {
+            skeleton.pendingRootMotion += currentTranslation - skeleton.previousRootTranslation;
+        }
+        skeleton.previousRootTranslation = currentTranslation;
+        skeleton.previousRootClipID = animationState.clipID;
+
+        // Zero the root bone's translation so it isn't baked into the skin a second time.
+        M_anim[rootID][3] = glm::vec4(0.0f, skeleton.pendingRootMotion.y, 0.0f, 1.0f);
+    }
+
+    // skinMatrices doubles as scratch space for the global animated transforms (G_anim)
+    // before being turned into the final skin matrices in the second pass below.
     for (int i = 0; i < numBones; i++) {
-        skinMatrices[i] = G_anim[i] * skeleton.bones[i].offsetMatrix;
+        const BoneInfo& bone = skeleton.bones[i];
+        skinMatrices[i] = bone.parentID == -1 ? M_anim[i] : skinMatrices[bone.parentID] * M_anim[i];
+    }
+
+    for (int i = 0; i < numBones; i++) {
+        skinMatrices[i] = skinMatrices[i] * skeleton.bones[i].offsetMatrix;
     }
 }
 
@@ -150,15 +164,16 @@ inline void updateAnimationState(float deltaTime, GLuint ssbo) {
         std::vector<glm::mat4> skinMatrices(skeleton.bones.size());
 
         const AnimationClip& animationClip = animationState.clips[animationState.clipID];
-        animationState.currentTime += deltaTime;
-        animationState.currentTime = fmod(animationState.currentTime, animationClip.duration);
+        float rawTime = animationState.currentTime + deltaTime;
+        bool clipLooped = rawTime >= animationClip.duration;
+        animationState.currentTime = fmod(rawTime, animationClip.duration);
 
         animationState.skinSlot = entityIndex;
 
         glm::mat4* slice =
             allSkinMatrices.data() + entityIndex * AnimationRenderer::MAX_BONES_PER_SKELETON;
         std::span<glm::mat4> skinMatricesSpan(slice, skeleton.bones.size());
-        computeSkinMatrices(skeleton, animationClip, animationState, skinMatricesSpan);
+        computeSkinMatrices(skeleton, animationClip, animationState, clipLooped, skinMatricesSpan);
 
         entityIndex++;
     }

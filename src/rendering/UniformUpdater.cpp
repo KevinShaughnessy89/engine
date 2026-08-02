@@ -36,6 +36,10 @@ glm::mat4 calculateModelMatrix(entt::entity entity) {
         auto& body = Registry.get<KinematicBody>(entity);
         glm::mat4 T = glm::translate(glm::mat4(1.0f), body.position);
         glm::mat4 R = glm::mat4_cast(body.orientation);
+        if (auto* renderable = Registry.try_get<Renderable>(entity)) {
+            R = R * glm::rotate(glm::mat4(1.0f), glm::radians(renderable->forwardOffsetDegrees),
+                                CameraConstants::WORLD_UP_AXIS);
+        }
         return T * R;
     }
     if (Registry.all_of<Position, Orientation>(entity)) {
@@ -158,6 +162,9 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity) {
             if (auto* animationState = Registry.try_get<AnimationState>(entity)) {
                 updateUniform(UniformData(UniformName::SkinSlot, animationState->skinSlot), shader);
             }
+        }
+        if (name == toCString(UniformName::Tint)) {
+            updateUniform(UniformData(UniformName::Tint, glm::vec3(1.0f)), shader);
         }
         if (name == toCString(UniformName::Model)) {
             if (renderable) {

@@ -141,8 +141,8 @@ void DisplayManager::setPerspectiveProjection() {
     modelShader->setMat4("projection", DisplayState::perspectiveMatrix);
 }
 
-void DisplayManager::render(double currentTime) {
-    Display.getRenderer().renderBatches(currentTime);
+void DisplayManager::render(double deltaTime) {
+    Display.getRenderer().renderBatches(deltaTime);
 }
 
 ShaderProgram* DisplayManager::getShaderProgramFromID(GLuint id) {

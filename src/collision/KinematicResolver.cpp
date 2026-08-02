@@ -59,6 +59,8 @@ ResolvedConstraint KinematicResolver::resolveCollisionConstraint(
         return resolved;
     }
 
+    return ResolvedConstraint{position, false};
+
     // auto tryGroundTriangle =
     //     [&](const TriangleData& triangleData) -> std::optional<ResolvedConstraint> {
     //     RayData rayData = RayData{};
