@@ -1,21 +1,27 @@
 #pragma once
-#include "core/PrecompiledHeader.hpp"
+
 #include "fmod/api/core/inc/fmod.hpp"
 
-class AudioController {
-   private:
-    FMOD::System* system;
-    std::unordered_map<std::string, FMOD::Sound*> soundMap;
+namespace AudioController {
 
-   public:
-    AudioController();
-    ~AudioController();
-
-    void init();
-    void update();
-    void loadSound(const std::string& name, const std::string& filename, bool is3D = false,
-                   bool isLooping = false);
-    void playSound(const std::string& name);
-    void stopSound(const std::string& name);
-    void cleanup();
+struct Sound {
+    std::string name;
+    FMOD::Sound* soundPtr = nullptr;
+    bool is3D = false;
+    bool isLooping = false;
+    float loopFrequency = 0.0f;  // 0 -> not periodic
+    float timeSinceLastPlay = 0.0f;
+    std::vector<FMOD::Channel*> activeChannels;
 };
+
+inline std::unordered_map<std::string, Sound> soundMap;
+inline FMOD::System* system;
+
+void init();
+void update(double deltaTime);
+void loadSound(const std::string& name, const std::string& filename, bool is3D = false,
+               bool isLooping = false);
+void playSound(const std::string& name);
+void stopSound(const std::string& name);
+void cleanup();
+};  // namespace AudioController

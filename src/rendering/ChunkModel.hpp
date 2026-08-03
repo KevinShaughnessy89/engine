@@ -5,6 +5,7 @@
 #include "core/PrecompiledHeader.hpp"
 
 class Texture;
+class Texture2D;
 class TextureArray2D;
 class TextureDataArray2D;
 class ShaderProgram;
@@ -24,6 +25,9 @@ struct ChunkSlot {
 class ChunkModel {
    public:
     ChunkModel();
+    // Defined in ChunkModel.cpp, not defaulted here -- the unique_ptr members below only have
+    // forward-declared types in this header, and their deleters need the complete type.
+    ~ChunkModel();
     // Safe to call again after the first time (e.g. when TerrainConfig::triangleCount changes at
     // runtime) -- frees the previous GL buffers before reallocating at the current sizes.
     // collisionChunks sizes the LOD0/1 pools; renderOnlyChunks adds LOD2-only capacity on top.
@@ -57,9 +61,9 @@ class ChunkModel {
     // in TerrainMeshGenerator::calculateNormals and uploaded per-chunk (see
     // ChunkGenerationPipeline::createChunk). Tangent/bitangent are derived in-shader from this
     // sampled normal rather than stored, since they're pure functions of it.
-    Texture* normalMapBufferTexture;
-    TextureDataArray2D* terrainNormalMapArray;
-    TextureArray2D* terrainDiffuseMapArray;
+    std::unique_ptr<Texture2D> normalMapBufferTexture;
+    std::unique_ptr<TextureDataArray2D> terrainNormalMapArray;
+    std::unique_ptr<TextureArray2D> terrainDiffuseMapArray;
     Clipmap<glm::vec2> normalMapBuffer;
 
    private:

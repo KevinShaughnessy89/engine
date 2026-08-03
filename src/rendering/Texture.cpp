@@ -41,7 +41,7 @@ void TextureDataMap::loadTexture(const std::vector<TextureData*>& textureData) {
     glBindTexture(GL_TEXTURE_2D, textureID);
     glObjectLabel(GL_TEXTURE, textureID, -1, name.c_str());
 
-    unsigned char* data = textureData[0]->data;
+    unsigned char* data = textureData[0]->data.get();
 
     if (!data) {
         std::cerr << "Failed to load normal map texture" << std::endl;
@@ -81,14 +81,9 @@ void TextureDataMap::loadTexture(const std::vector<TextureData*>& textureData) {
                  data);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    if (textureData[0]->wasCached) {
-        delete[] data;
-    } else {
-        if (textureData[0]->name != "fallback") {
-            stbi_image_free(data);
-        }
-    }
-    delete textureData[0];
+    // The GPU now owns the pixel data -- shell ownership belongs to whoever passed it in, not to
+    // this function, so only the buffer is freed here.
+    textureData[0]->data.reset();
 
     // Texture wrapping: normal maps should tile cleanly
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -121,7 +116,7 @@ void Texture2D::loadTexture(const std::vector<TextureData*>& textureData) {
     glObjectLabel(GL_TEXTURE, textureID, -1, name.c_str());
 
     // Load image
-    unsigned char* data = textureData[0]->data;
+    unsigned char* data = textureData[0]->data.get();
     if (data) {
         GLenum format = 0;
         GLenum internalFormat = 0;
@@ -148,16 +143,12 @@ void Texture2D::loadTexture(const std::vector<TextureData*>& textureData) {
         // buffer on the last row.
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, textureData[0]->width,
-                     textureData[0]->height, 0, format, GL_UNSIGNED_BYTE, textureData[0]->data);
+                     textureData[0]->height, 0, format, GL_UNSIGNED_BYTE, data);
         glGenerateMipmap(GL_TEXTURE_2D);
 
-        if (textureData[0]->wasCached) {
-            delete[] data;
-        } else {
-            if (textureData[0]->name != "fallback") {
-                stbi_image_free(data);
-            }
-        }
+        // The GPU now owns the pixel data; free the CPU-side buffer promptly rather than waiting
+        // on whoever owns the TextureData shell to get around to deleting it.
+        textureData[0]->data.reset();
 
     } else {
         std::cout << "Failed to load texture" << std::endl;
@@ -195,11 +186,13 @@ void Texture2D::generateFallbackTexture() {
         }
     }
 
-    TextureData* textureData = new TextureData("fallback", "null", size, size, 3, data, false);
+    TextureData* textureData = new TextureData("fallback", "null", size, size, 3, data,
+                                                TextureDataOrigin::HeapArray);
     this->name = "fallback";
     this->uniform = "";
 
     loadTexture(std::vector<TextureData*>({textureData}));
+    delete textureData;
 }
 
 void TextureCube::loadTexture(const std::vector<TextureData*>& textureData) {
@@ -224,13 +217,9 @@ void TextureCube::loadTexture(const std::vector<TextureData*>& textureData) {
             GLenum internalFormat = ((*it)->nrChannels == 3) ? GL_RGB8 : GL_RGBA8;
             GLenum format = ((*it)->nrChannels == 3) ? GL_RGB : GL_RGBA;
             glTexImage2D(faceText[i], 0, internalFormat, (*it)->width, (*it)->height, 0, format,
-                         GL_UNSIGNED_BYTE, (*it)->data);
+                         GL_UNSIGNED_BYTE, (*it)->data.get());
 
-            if ((*it)->wasCached) {
-                delete[] (*it)->data;
-            } else {
-                stbi_image_free((*it)->data);
-            }
+            (*it)->data.reset();
 
             i++;
         } else {
@@ -329,15 +318,10 @@ void TextureDataArray2D::loadTexture(const std::string& texturePath) {
                         0,                    // mip level -- storage above only has level 0
                         0, 0, nextFreeLayer,  // xoffset, yoffset, zoffset (layer)
                         width, height, 1,     // width, height, depth=1 layer
-                        format, GL_UNSIGNED_BYTE, newTextureData->data);
+                        format, GL_UNSIGNED_BYTE, newTextureData->data.get());
     }
     nextFreeLayer++;
 
-    if (newTextureData->wasCached) {
-        delete[] newTextureData->data;
-    } else {
-        stbi_image_free(newTextureData->data);
-    }
     delete newTextureData;
 }
 
@@ -392,7 +376,7 @@ void TextureArray2D::loadTexture(const std::string& texturePath) {
                         0,                    // mip level -- storage above only has level 0
                         0, 0, nextFreeLayer,  // xoffset, yoffset, zoffset (layer)
                         width, height, 1,     // width, height, depth=1 layer
-                        format, GL_UNSIGNED_BYTE, newTextureData->data);
+                        format, GL_UNSIGNED_BYTE, newTextureData->data.get());
     }
     nextFreeLayer++;
 
@@ -403,11 +387,6 @@ void TextureArray2D::loadTexture(const std::string& texturePath) {
     // cost, so regenerating a few extra times is free correctness insurance.
     glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
-    if (newTextureData->wasCached) {
-        delete[] newTextureData->data;
-    } else {
-        stbi_image_free(newTextureData->data);
-    }
     delete newTextureData;
 }
 

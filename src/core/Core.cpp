@@ -1,7 +1,6 @@
 #include "Core.hpp"
 
 #include "ai/EnemyManager.hpp"
-#include "audio/AudioController.hpp"
 #include "collision/CollisionManager.hpp"
 #include "collision/ContactResolver.hpp"
 #include "core/CommandBuffer.hpp"
@@ -15,7 +14,6 @@
 #include "physics/PhysicsManager.hpp"
 #include "physics/ProjectileManager.hpp"
 #include "rendering/DisplayManager.hpp"
-#include "rendering/KinematicController.hpp"
 #include "rendering/LightManager.hpp"
 #include "rendering/ModelLoader.hpp"
 #include "rendering/ResourceManager.hpp"
@@ -33,7 +31,6 @@ KeyHandling& Keyboard = Core::Keyboard();
 MouseHandling& Mouse = Core::Mouse();
 InputHandler& Input = Core::Input();
 DisplayManager& Display = Core::Display();
-AudioController& Audio = Core::Audio();
 TextureManager& Textures = Core::Textures();
 ModuleManager& Modules = Core::Modules();
 EnemyManager& Enemies = Core::Enemies();
@@ -45,12 +42,6 @@ entt::registry& Registry = Core::Registry();
 TextureManager& Core::Textures() {
     static TextureManager instance;
     std::cout << "[Core] TextureManager constructed\n";
-    return instance;
-}
-
-AudioController& Core::Audio() {
-    static AudioController instance;
-    std::cout << "[Core] AudioController constructed\n";
     return instance;
 }
 

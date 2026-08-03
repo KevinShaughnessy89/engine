@@ -274,14 +274,14 @@ InstancedModel* TerrainAssetFactory::createTreeImposter(const std::string& model
         baker.cleanup();
     }
 
-    Texture* atlasTexture;
-    if (Texture* existing = Textures.getTexture(imposterName)) {
-        atlasTexture = existing;
-    } else {
+    Texture* atlasTexture = Textures.getTexture(imposterName);
+    if (!atlasTexture) {
         std::string filename = imposterName + ".png";
         TextureData atlasData(path, imposterName, filename);
-        atlasTexture = new Texture2D(std::vector<TextureData*>{&atlasData}, imposterName,
-                                     "treeAtlasTexture");
+        auto owned = std::make_unique<Texture2D>(std::vector<TextureData*>{&atlasData},
+                                                 imposterName, "treeAtlasTexture");
+        atlasTexture = owned.get();
+        Textures.addTexture(imposterName, std::move(owned));
     }
 
     atlasTexture->setUniform("treeAtlasTexture");

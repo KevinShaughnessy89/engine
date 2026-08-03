@@ -44,14 +44,17 @@ class TextureManager : public Module {
     Texture* getTexture(const std::string& name);
     Texture* getTextureAs(const std::string currentName, const std::string newName);
     void setUniform(const std::string& name, std::string uniform);
-    void addTexture(const std::string& name, Texture* texture) { textures[name] = texture; }
+    // Ownership transfers here; callers keep using the raw pointer returned by getTexture().
+    void addTexture(const std::string& name, std::unique_ptr<Texture> texture) {
+        textures[name] = std::move(texture);
+    }
     std::vector<TextureUniformData> globalTextureUniforms = {};
 
    private:
     std::vector<std::future<void>> loadingTextures;
     std::vector<std::string> directories;
-    std::unordered_map<std::string, Texture*> textures;
-    std::unordered_map<std::string, TextureData*> textureData;
+    std::unordered_map<std::string, std::unique_ptr<Texture>> textures;
+    std::unordered_map<std::string, std::unique_ptr<TextureData>> textureData;
     std::vector<TextureFile> textureFiles;
     std::mutex textureDataMutex;
     std::mutex texturesMutex;

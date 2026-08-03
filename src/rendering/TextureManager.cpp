@@ -26,11 +26,11 @@ void TextureManager::doInitialization() {
 
 void TextureManager::loadSingleTextureData(const std::string& texturePath, const std::string& name,
                                            std::string& filename) {
-    TextureData* newTextureData = new TextureData(texturePath, name, filename);
+    auto newTextureData = std::make_unique<TextureData>(texturePath, name, filename);
     saveTextureData(*newTextureData, name, texturePath);
     {
         std::lock_guard<std::mutex> lock(textureDataMutex);
-        textureData[name] = newTextureData;
+        textureData[name] = std::move(newTextureData);
     }
 }
 
@@ -107,28 +107,27 @@ void TextureManager::loadTextures() {
     std::vector<TextureData*> texture2D;
     for (const auto& [name, data] : textureData) {
         if (name.substr(0, 7) == "skybox_") {
-            skyboxTextures.push_back(data);
+            skyboxTextures.push_back(data.get());
         } else if (name.substr(0, 5) == "data_") {
-            texture2D.push_back(data);
-            textures.emplace(name, new TextureDataMap(texture2D, name));
+            texture2D.push_back(data.get());
+            textures.emplace(name, std::make_unique<TextureDataMap>(texture2D, name));
             texture2D.clear();
         } else if (name.substr(0, 5) == "cube_") {
-            skyboxTextures.push_back(data);
+            skyboxTextures.push_back(data.get());
 
         } else {
-            texture2D.push_back(data);
-            textures.emplace(name, new Texture2D(texture2D, name));
+            texture2D.push_back(data.get());
+            textures.emplace(name, std::make_unique<Texture2D>(texture2D, name));
             texture2D.clear();
         }
     }
-    textures.emplace("skyboxTexture", new TextureCube(skyboxTextures, "skyboxTexture"));
+    textures.emplace("skyboxTexture", std::make_unique<TextureCube>(skyboxTextures, "skyboxTexture"));
 }
 
 void TextureManager::removeTexture(const std::string& name) {
     auto it = textures.find(name);
     if (it != textures.end()) {
-        delete it->second;   // Free the memory of the Texture object
-        textures.erase(it);  // Remove the entry from the map
+        textures.erase(it);  // Remove the entry from the map, freeing the Texture object
     } else {
         std::cout << "TextureManager warning: texture " << name << " not found for removal."
                   << std::endl;
@@ -151,7 +150,7 @@ void TextureManager::saveTextureData(TextureData& data, const std::string& name,
         file.write(reinterpret_cast<const char*>(&data.width), sizeof(int));
         file.write(reinterpret_cast<const char*>(&data.height), sizeof(int));
         file.write(reinterpret_cast<const char*>(&data.nrChannels), sizeof(int));
-        file.write(reinterpret_cast<const char*>(data.data),
+        file.write(reinterpret_cast<const char*>(data.data.get()),
                    data.width * data.height * data.nrChannels);
     } else {
         std::cerr << "Failed to write to file " << outputPath << std::endl;
@@ -159,21 +158,20 @@ void TextureManager::saveTextureData(TextureData& data, const std::string& name,
 }
 
 void TextureManager::loadTextureData(const std::string& filename, const std::string name) {
-    TextureData* data = new TextureData();
+    auto data = std::make_unique<TextureData>();
     data->name = name;
     data->filename = filename;
-    data->wasCached = true;
     std::ifstream file(filename, std::ios::binary);
     file.read(reinterpret_cast<char*>(&data->width), sizeof(int));
     file.read(reinterpret_cast<char*>(&data->height), sizeof(int));
     file.read(reinterpret_cast<char*>(&data->nrChannels), sizeof(int));
 
-    data->data = new unsigned char[data->width * data->height * data->nrChannels];
-
-    file.read(reinterpret_cast<char*>(data->data), data->height * data->width * data->nrChannels);
+    unsigned char* buffer = new unsigned char[data->width * data->height * data->nrChannels];
+    file.read(reinterpret_cast<char*>(buffer), data->height * data->width * data->nrChannels);
+    data->data = TextureBuffer(buffer, TextureDataDeleter{TextureDataOrigin::HeapArray});
     {
         std::lock_guard<std::mutex> lock(textureDataMutex);
-        textureData[name] = data;
+        textureData[name] = std::move(data);
     }
 }
 
@@ -200,7 +198,7 @@ Texture* TextureManager::getTexture(const std::string& name) {
     auto it = textures.find(textureName);
     if (it != textures.end()) {
         if (it->second) {
-            return it->second;
+            return it->second.get();
         }
         std::cout << "TextureManager warning: texture pointer is null for: " << textureName
                   << std::endl;

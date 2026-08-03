@@ -86,8 +86,9 @@ class ModelLoader {
     std::vector<Texture*> loadMaterialTextures(aiMaterial* mat, const aiScene* scene,
                                                aiTextureType type);
     Material extractMaterial(aiMaterial* material);
-    void loadEmbeddedTextures(const aiScene* scene);
-    Texture* createTextureFromEmbedded(const aiTexture* tex, unsigned int index);
+    void loadEmbeddedTextures(const aiScene* scene, const std::string& namePrefix);
+    Texture* createTextureFromEmbedded(const aiTexture* tex, unsigned int index,
+                                       const std::string& namePrefix);
     template <typename ModelT>
     size_t getOrCreateMaterialIndex(ModelT* model, aiMaterial* material,
                                     unsigned int sceneMaterialIndex);

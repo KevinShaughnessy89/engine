@@ -1,14 +1,5 @@
 #include "AudioController.hpp"
 
-#include "core/PrecompiledHeader.hpp"
-
-AudioController::AudioController() : system(nullptr) {
-}
-
-AudioController::~AudioController() {
-    cleanup();
-}
-
 void AudioController::init() {
     FMOD_RESULT result = FMOD::System_Create(&system);
 
@@ -20,9 +11,19 @@ void AudioController::init() {
     result = system->init(32, FMOD_INIT_NORMAL, nullptr);
 }
 
-void AudioController::update() {
+void AudioController::update(double deltaTime) {
     if (system) {
         system->update();
+    }
+
+    for (auto& [name, sound] : soundMap) {
+        if (sound.loopFrequency > 0.0f) {
+            sound.timeSinceLastPlay += deltaTime;
+            if (sound.timeSinceLastPlay >= sound.loopFrequency) {
+                playSound(name);
+                sound.timeSinceLastPlay = 0.0f;
+            }
+        }
     }
 }
 
@@ -45,26 +46,36 @@ void AudioController::loadSound(const std::string& name, const std::string& file
         return;
     }
 
-    soundMap[name] = sound;
+    soundMap[name] = Sound{name, sound, is3D, isLooping};
 }
 
 void AudioController::playSound(const std::string& name) {
     auto it = soundMap.find(name);
     if (it != soundMap.end()) {
         FMOD::Channel* channel = nullptr;
-        system->playSound(it->second, nullptr, false, &channel);
+        system->playSound(it->second.soundPtr, nullptr, false, &channel);
+        if (channel) {
+            it->second.activeChannels.push_back(channel);
+        }
     }
 }
 
 void AudioController::stopSound(const std::string& name) {
+    auto it = soundMap.find(name);
+    if (it == soundMap.end()) return;
+
+    for (FMOD::Channel* ch : it->second.activeChannels) {
+        if (ch) ch->stop();
+    }
+    it->second.activeChannels.clear();
 }
 
 void AudioController::cleanup() {
     for (auto& pair : soundMap) {
-        if (pair.second) {
-            pair.second->release();
-            delete pair.second;
-            pair.second = nullptr;
+        if (pair.second.soundPtr) {
+            pair.second.soundPtr->release();
+            // delete pair.second; // Not needed, as pair.second is not a pointer
+            pair.second.soundPtr = nullptr;
         }
     }
     soundMap.clear();

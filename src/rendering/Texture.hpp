@@ -1,11 +1,30 @@
 #pragma once
 #include <iomanip>
 #include <iostream>
+#include <memory>
 
 #include "core/PrecompiledHeader.hpp"
 #include "tinyexr-release/tinyexr.h"
 
 class ShaderProgram;
+
+// stbi_load allocates with malloc (freed via stbi_image_free); EXR decoding and the cache-file
+// path both allocate with new[] (freed via delete[]) -- the deleter has to know which one
+// produced a given buffer, so the two can't be freed interchangeably.
+enum class TextureDataOrigin { None, Stbi, HeapArray };
+
+struct TextureDataDeleter {
+    TextureDataOrigin origin = TextureDataOrigin::None;
+    void operator()(unsigned char* data) const {
+        if (!data) return;
+        if (origin == TextureDataOrigin::Stbi) {
+            stbi_image_free(data);
+        } else {
+            delete[] data;
+        }
+    }
+};
+using TextureBuffer = std::unique_ptr<unsigned char[], TextureDataDeleter>;
 
 struct TextureData {
     std::string name;
@@ -13,25 +32,22 @@ struct TextureData {
     int width = 0;
     int height = 0;
     int nrChannels = 0;
-    unsigned char* data = nullptr;
-    bool wasCached = false;
+    TextureBuffer data;
     TextureData() = default;
 
     TextureData(const std::string& texturePath, const std::string& name, std::string& filename)
         : name(name), filename(filename) {
         getTextureData(texturePath);
-        wasCached = false;
     }
 
     TextureData(const std::string& name, const std::string& filename, int width, int height,
-                int nrChannels, unsigned char* data, bool wasCached)
+                int nrChannels, unsigned char* data, TextureDataOrigin origin)
         : name(name),
           filename(filename),
           width(width),
           height(height),
           nrChannels(nrChannels),
-          data(data),
-          wasCached(wasCached) {}
+          data(data, TextureDataDeleter{origin}) {}
 
     bool getTextureData(const std::string& texturePath) {
         bool isExr = texturePath.substr(texturePath.find_last_of(".") + 1) == "exr";
@@ -59,17 +75,18 @@ struct TextureData {
                 v = std::clamp(v, 0.0f, 1.0f);
                 temp[i] = static_cast<unsigned char>(v * 255.0f + 0.5f);
             }
-            data = temp;
+            free(out);  // tinyexr allocates this with malloc; was never freed before
+            data = TextureBuffer(temp, TextureDataDeleter{TextureDataOrigin::HeapArray});
             return true;
         } else {
-            data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
-            if (!data) {
+            unsigned char* loaded = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
+            if (!loaded) {
                 std::cout << "Texture data failed to load at path: " << texturePath << std::endl;
                 return false;
             }
+            data = TextureBuffer(loaded, TextureDataDeleter{TextureDataOrigin::Stbi});
             return true;
         }
-        return false;
     }
 
     void printSummary(int maxPixels = 10) const {
@@ -109,6 +126,7 @@ class Texture {
     Texture(const std::string& name, const std::string& uniform = "");
     Texture(GLuint texture, const std::string& name, const std::string& uniform = "")
         : name(name), uniform(uniform), textureID(texture) {}
+    virtual ~Texture() = default;
     GLuint textureID;
     std::string name;
     std::string uniform;

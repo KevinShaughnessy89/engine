@@ -203,10 +203,10 @@ void Model::generateFallbackModel() {
     auto newMesh = std::make_unique<Mesh>();
     newMesh->setCube();
 
-    Texture2D* fallbackTexture = new Texture2D();
+    fallbackTexture = std::make_unique<Texture2D>();
     fallbackTexture->generateFallbackTexture();
     fallbackTexture->setUniform("textureDiffuse");
-    newMesh->textures.push_back(fallbackTexture);
+    newMesh->textures.push_back(fallbackTexture.get());
 
     meshes.push_back(std::move(newMesh));
 }

@@ -14,6 +14,9 @@ class Model {
     std::string name;
     std::vector<std::unique_ptr<Mesh>> meshes;
     std::vector<Material> materials;
+    // Owns the checkerboard texture generateFallbackModel() creates -- unlike every other Texture*
+    // a Mesh holds, this one isn't registered with (and thus isn't owned by) TextureManager.
+    std::unique_ptr<Texture> fallbackTexture;
     std::string directory;
     std::string modelPath;
     glm::mat4 transform = glm::mat4(0.f);

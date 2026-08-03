@@ -18,6 +18,7 @@
 #include "components/rendering/Renderable.hpp"
 #include "components/rendering/SunState.hpp"
 #include "components/rendering/ViewState.hpp"
+#include "core/Config.hpp"
 #include "core/InputHandler.hpp"
 #include "core/KeyHandling.hpp"
 #include "core/ModuleManager.hpp"
@@ -251,7 +252,11 @@ bool Game::init() {
     // MODULES
     Modules.registerModule(&Textures, "TextureManager");
     // AUDIO
-    Audio.init();
+    AudioController::init();
+    AudioController::loadSound(
+        "ambient", Config::ProjectRootDir + "/" + AssetFilePath::audioFiles + "peter_gundry1.mp3",
+        false, true);
+    AudioController::playSound("ambient");
     // DISPLAY
     Display.loadShaders();
     Display.setAspectValues(framebufferWidth, framebufferHeight);
@@ -278,7 +283,6 @@ bool Game::init() {
 
     Resource.buildProjectiles();
     Resource.setCameraValues();
-
     Modules.startInitialization();
 
     // Collision.initOctTree();
@@ -310,8 +314,7 @@ bool Game::init() {
 
     prewarmComponentStorage();
 
-    // Environment.init() also depends on ModelRegistry.loadScene() having run, since it
-    // attaches SunState/SkyState to the "sun"/"skybox" entities looked up there.
+    // Environment.init() depends on ModelRegistry.loadScene() having run
     Environment.init();
     systemCore->characterController.init();
     Display.init();
@@ -320,9 +323,6 @@ bool Game::init() {
 }
 
 // Pre-warm all component pools that are accessed by worker threads.
-// EnTT's assure() writes to an internal dense_map on first access of any
-// component type, even for get() calls. All pools must be initialized on
-// the main thread before any worker threads start accessing the registry.
 void Game::prewarmComponentStorage() {
     Registry.storage<CameraState>();
     Registry.storage<KinematicBody>();
@@ -395,6 +395,8 @@ void Game::updateWorldState(double deltaTime, double currentTime) {
         ZoneScopedN("updateWorldState: Commands.processEntityCreation");
         Commands.processEntityCreation();
     }
+
+    AudioController::update(deltaTime);
 
     if (!DebugState::sunManualOverride) {
         ZoneScopedN("updateWorldState: SunHelper::updateSunState");

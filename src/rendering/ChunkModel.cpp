@@ -31,6 +31,8 @@ int desiredLodForDistance(float distance) {
 ChunkModel::ChunkModel() : initialized(false) {
 }
 
+ChunkModel::~ChunkModel() = default;
+
 void ChunkModel::teardown() {
     glDeleteBuffers(1, &sharedVBO_lod0);
     glDeleteBuffers(1, &sharedVBO_lod1);
@@ -41,7 +43,6 @@ void ChunkModel::teardown() {
     glDeleteVertexArrays(1, &sharedVAO_lod0);
     glDeleteVertexArrays(1, &sharedVAO_lod1);
     glDeleteVertexArrays(1, &sharedVAO_lod2);
-    delete normalMapBufferTexture;
 }
 
 void ChunkModel::initialize(int collisionChunks, int renderOnlyChunks) {
@@ -126,9 +127,11 @@ void ChunkModel::initialize(int collisionChunks, int renderOnlyChunks) {
 
     buildSharedIndices();
 
-    terrainDiffuseMapArray = new TextureArray2D("terrain_diffuse", 4, "textureDiffuseArray");
+    terrainDiffuseMapArray =
+        std::make_unique<TextureArray2D>("terrain_diffuse", 4, "textureDiffuseArray");
 
-    terrainNormalMapArray = new TextureDataArray2D("terrain_normal", 4, "textureNormalArray");
+    terrainNormalMapArray =
+        std::make_unique<TextureDataArray2D>("terrain_normal", 4, "textureNormalArray");
 
     std::string rootPath = Config::ProjectRootDir + "/" + AssetFilePath::terrainTextures;
     // terrainDiffuseMapArray->loadTexture(rootPath + "/terrain_diffuse.png");
@@ -145,10 +148,10 @@ void ChunkModel::initialize(int collisionChunks, int renderOnlyChunks) {
     Texture* displacementMap = Textures.getTexture("data_terrain_displacement");
     displacementMap->setUniform("textureDisplacement");
 
-    normalMapBufferTexture =
-        new Texture2D(normalMapBuffer.getTextureID(), "normalMapBuffer", "normalMapBuffer");
+    normalMapBufferTexture = std::make_unique<Texture2D>(normalMapBuffer.getTextureID(),
+                                                          "normalMapBuffer", "normalMapBuffer");
 
-    textures = {terrainDiffuseMapArray, terrainNormalMapArray, displacementMap};
+    textures = {terrainDiffuseMapArray.get(), terrainNormalMapArray.get(), displacementMap};
 }
 
 void ChunkModel::setLod(ChunkSlot& slot, int lod) {

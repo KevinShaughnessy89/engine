@@ -116,7 +116,7 @@ void ModelLoader::create(const std::string& name, ModelData& data) {
 
     embeddedTextures.clear();
     if (scene->HasTextures()) {
-        loadEmbeddedTextures(scene);
+        loadEmbeddedTextures(scene, name);
     }
 
     GLuint shaderID = Display.getShaderIdFromShaderType(data.shaderType);
@@ -462,15 +462,19 @@ std::vector<Texture*> ModelLoader::loadMaterialTextures(aiMaterial* mat, const a
     return textures;
 }
 
-void ModelLoader::loadEmbeddedTextures(const aiScene* scene) {
+void ModelLoader::loadEmbeddedTextures(const aiScene* scene, const std::string& namePrefix) {
     for (unsigned int i = 0; i < scene->mNumTextures; i++) {
-        Texture* texture = createTextureFromEmbedded(scene->mTextures[i], i);
+        Texture* texture = createTextureFromEmbedded(scene->mTextures[i], i, namePrefix);
         if (texture != nullptr) embeddedTextures[i] = texture;
     }
 }
 
-Texture* ModelLoader::createTextureFromEmbedded(const aiTexture* tex, unsigned int index) {
-    std::string name = "embedded_" + std::to_string(index);
+Texture* ModelLoader::createTextureFromEmbedded(const aiTexture* tex, unsigned int index,
+                                                const std::string& namePrefix) {
+    // Prefixed with the owning model's name so embedded textures from different models (which
+    // Assimp indexes independently, starting at 0 for each scene) don't collide as TextureManager
+    // keys -- a collision would silently replace and free an earlier model's still-in-use texture.
+    std::string name = namePrefix + "_embedded_" + std::to_string(index);
 
     unsigned char* decoded = nullptr;
     int width = 0, height = 0, channels = 0;
@@ -499,12 +503,20 @@ Texture* ModelLoader::createTextureFromEmbedded(const aiTexture* tex, unsigned i
         }
     }
 
-    // wasCached=true routes cleanup through delete[] (matching the `new[]` above) instead of
-    // stbi_image_free, which only applies to the malloc'd buffer stbi_load_from_memory returns.
-    bool wasCached = tex->mHeight != 0;
-    TextureData* textureData =
-        new TextureData(name, name, width, height, channels, decoded, wasCached);
-    return new Texture2D(std::vector<TextureData*>({textureData}), name);
+    // The BGRA8888 branch above allocates with new[] (needs delete[]); the compressed branch
+    // decodes via stbi_load_from_memory (needs stbi_image_free) -- origin tells TextureData which
+    // applies.
+    TextureDataOrigin origin =
+        tex->mHeight != 0 ? TextureDataOrigin::HeapArray : TextureDataOrigin::Stbi;
+    TextureData textureData(name, name, width, height, channels, decoded, origin);
+    auto texture =
+        std::make_unique<Texture2D>(std::vector<TextureData*>({&textureData}), name);
+    Texture* raw = texture.get();
+    // Owned by TextureManager from here on (same lifetime model as file-loaded textures) so this
+    // pointer stays valid for every Mesh that references it, even after embeddedTextures is
+    // cleared for the next model in loadScene()'s loop.
+    Textures.addTexture(name, std::move(texture));
+    return raw;
 }
 
 Renderable& ModelLoader::getRenderable(const std::string& name, int index) {
