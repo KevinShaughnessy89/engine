@@ -9,50 +9,21 @@
 #include "environment/TriangleManager.hpp"
 #include "rendering/CameraConstants.hpp"
 
-void updateGroundTolerance(const float deltaTime, const float cameraSpeed,
-                           const float verticalVelocity, const float groundClearance,
-                           float& groundTolerance) {
-    float dt = deltaTime;
-    float maxHorizontalStep = cameraSpeed * dt;
-    float maxVerticalStep = std::abs(verticalVelocity) * dt / CameraConstants::gravity;
-    groundTolerance = groundClearance + maxHorizontalStep + maxVerticalStep;
-}
-
 ResolvedConstraint KinematicResolver::fromHeightMap(glm::vec3 position, const KinematicBody& body,
                                                     double deltaTime) {
     float height;
-    float groundTolerance;
-    updateGroundTolerance(static_cast<float>(deltaTime), body.speed, body.verticalVelocity,
-                          body.groundClearance, groundTolerance);
     if (Chunks.sampleBakedHeight(position.x, position.z, height)) {
-        float dt = static_cast<float>(deltaTime);
-        float maxHorizontalStep = body.speed * dt;
-        float maxVerticalStep = std::abs(body.verticalVelocity) * dt / CameraConstants::gravity;
-        float groundTolerance = body.groundClearance + maxHorizontalStep + maxVerticalStep;
-
-        if (std::abs(position.y - height) <= groundTolerance) {
-            glm::vec3 finalPosition = position;
-            finalPosition.y = height + body.groundClearance - body.groundClearance / 10.f;
-            return ResolvedConstraint{finalPosition, true};
-        }
+        glm::vec3 finalPosition = position;
+        finalPosition.y = height;
+        return ResolvedConstraint{finalPosition, true};
     }
+    // }
     return ResolvedConstraint{position, false};
 }
 
 ResolvedConstraint KinematicResolver::resolveCollisionConstraint(
     glm::vec3 position, const std::vector<uint32_t>& candidates, const KinematicBody& body,
     double deltaTime) {
-    // groundClearance alone is a fixed-distance snap tolerance, so it only holds up at a steady
-    // frame rate. A single slow/spiky frame can move the body - horizontally down a slope via
-    // deltaPos (speed * deltaTime), or vertically via gravity (verticalVelocity * deltaTime
-    // / 10, matching the integration in KinematicController::update) - further than that fixed
-    // distance in one step, which flips isGrounded false for a frame and produces a stutter.
-    // Padding the tolerance by this frame's worst-case movement keeps grounding stable regardless
-    // of frame pacing.
-    float groundTolerance;
-    updateGroundTolerance(static_cast<float>(deltaTime), body.speed, body.verticalVelocity,
-                          body.groundClearance, groundTolerance);
-
     auto resolved = fromHeightMap(position, body, deltaTime);
 
     if (resolved.isGrounded) {

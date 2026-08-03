@@ -8,8 +8,10 @@
 
 #include "character/AnimationModelLoader.hpp"
 #include "character/AnimationRenderer.hpp"
+#include "components/rendering/AnimationState.hpp"
 #include "components/rendering/InstancedRenderable.hpp"
 #include "components/rendering/Renderable.hpp"
+#include "components/rendering/SkeletonComponent.hpp"
 #include "core/Config.hpp"
 #include "core/Core.hpp"
 #include "entt-main/src/entt/entt.hpp"
@@ -113,7 +115,7 @@ void ModelLoader::create(const std::string& name, ModelData& data) {
     // PrintScene(scene, true);
 
     embeddedTextures.clear();
-    if (path.size() >= 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {
+    if (scene->HasTextures()) {
         loadEmbeddedTextures(scene);
     }
 
@@ -305,13 +307,16 @@ void ModelLoader::processMesh(ModelT* model, aiMesh* mesh, const aiScene* scene,
     static const std::vector<std::pair<aiTextureType, const char*>> allTypes = {
         {aiTextureType_DIFFUSE, "textureDiffuse"},
         {aiTextureType_NORMALS, "textureNormal"},
+        {aiTextureType_SPECULAR, "textureSpecular"},
+        {aiTextureType_SHININESS, "textureShininess"},
+        {aiTextureType_EMISSIVE, "textureEmissive"},
         {aiTextureType_METALNESS, "textureMetallic"},
         {aiTextureType_DIFFUSE_ROUGHNESS, "textureRoughness"},
         {aiTextureType_OPACITY, "textureAlpha"},
         {aiTextureType_AMBIENT_OCCLUSION, "textureAO"}};
 
     for (const auto& [textureType, uniform] : allTypes) {
-        for (Texture* tex : loadMaterialTextures(material, textureType)) {
+        for (Texture* tex : loadMaterialTextures(material, scene, textureType)) {
             if (tex) {
                 tex->setUniform(uniform);
                 textures.push_back(tex);
@@ -370,7 +375,6 @@ void ModelLoader::processAnimations(const ModelData& data) {
         }
         for (unsigned int i = 0; i < scene->mNumAnimations; i++) {
             const aiAnimation* anim = scene->mAnimations[i];
-            std::cout << "Anim " << i << " raw name: '" << anim->mName.C_Str() << "'\n";
             AnimationClip clip = AnimationModelLoader::loadClip(anim);
             clip.name = animName;  // use the JSON key, not the FBX's internal track name
             registryEntry.clips.push_back(clip);
@@ -428,23 +432,32 @@ size_t ModelLoader::getOrCreateMaterialIndex(ModelT* model, aiMaterial* material
     return index;
 }
 
-std::vector<Texture*> ModelLoader::loadMaterialTextures(aiMaterial* mat, aiTextureType type) {
+std::vector<Texture*> ModelLoader::loadMaterialTextures(aiMaterial* mat, const aiScene* scene,
+                                                        aiTextureType type) {
     std::vector<Texture*> textures;
     for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
         aiString str;
         mat->GetTexture(type, i, &str);
         std::cout << "Loading texture: " << str.C_Str() << std::endl;
 
-        Texture* texture = nullptr;
-        if (str.length > 0 && str.C_Str()[0] == '*') {
-            unsigned int embeddedIndex = static_cast<unsigned int>(std::atoi(str.C_Str() + 1));
-            auto it = embeddedTextures.find(embeddedIndex);
-            if (it != embeddedTextures.end()) texture = it->second;
-        } else {
-            texture = Textures.getTexture(str.C_Str());
-        }
+        Texture* texture = Textures.getTexture(str.C_Str());
 
-        if (texture != nullptr) textures.push_back(texture);
+        if (!texture) {
+            const aiTexture* embeddedTexture = scene->GetEmbeddedTexture(str.C_Str());
+            if (embeddedTexture) {
+                for (int i = 0; i < scene->mNumTextures; i++) {
+                    if (embeddedTexture == scene->mTextures[i]) {
+                        auto it = embeddedTextures.find(i);
+                        if (it != embeddedTextures.end()) {
+                            texture = it->second;
+                            textures.push_back(texture);
+                        }
+                    }
+                }
+            }
+        } else {
+            textures.push_back(texture);
+        }
     }
     return textures;
 }
@@ -699,7 +712,18 @@ void ModelLoader::PrintMeshSummary(const aiScene* scene, bool detailed) {
     }
 }
 
-void ModelLoader::PrintNode(const aiNode* node, int depth, bool detailed) {
+void ModelLoader::PrintTextureTypes(const aiMaterial* material) {
+    std::string materialName = material->GetName().C_Str();
+    for (int t = 0; t <= AI_TEXTURE_TYPE_MAX; t++) {
+        unsigned int count = material->GetTextureCount(static_cast<aiTextureType>(t));
+        if (count > 0) {
+            std::cout << "    texture type=" << t << " count=" << count << " (material \""
+                      << materialName << "\")\n";
+        }
+    }
+}
+
+void ModelLoader::PrintNode(const aiScene* scene, const aiNode* node, int depth, bool detailed) {
     std::string indent(depth * 2, ' ');
     std::cout << indent << node->mName.C_Str() << " (meshes: " << node->mNumMeshes;
 
@@ -727,10 +751,15 @@ void ModelLoader::PrintNode(const aiNode* node, int depth, bool detailed) {
         std::cout << indent << "  scale(" << scale.x << ", " << scale.y << ", " << scale.z << ")"
                   << "  translation(" << translation.x << ", " << translation.y << ", "
                   << translation.z << ")\n";
+
+        for (unsigned i = 0; i < node->mNumMeshes; ++i) {
+            const aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+            PrintTextureTypes(scene->mMaterials[mesh->mMaterialIndex]);
+        }
     }
 
     for (unsigned i = 0; i < node->mNumChildren; ++i)
-        PrintNode(node->mChildren[i], depth + 1, detailed);
+        PrintNode(scene, node->mChildren[i], depth + 1, detailed);
 }
 
 void ModelLoader::PrintScene(const aiScene* scene, bool detailed) {
@@ -739,6 +768,6 @@ void ModelLoader::PrintScene(const aiScene* scene, bool detailed) {
     if (detailed) PrintMaterialSummary(scene);
     PrintMeshSummary(scene, detailed);
     std::cout << "=== Node Hierarchy ===\n";
-    PrintNode(scene->mRootNode, 0, detailed);
+    PrintNode(scene, scene->mRootNode, 0, detailed);
     std::cout << "########################################\n\n";
 }

@@ -7,6 +7,7 @@
 #include "entt-main/src/entt/entity/fwd.hpp"
 
 class ShaderProgram;
+class Mesh;
 class InstancedMesh;
 
 namespace UniformUpdater {
@@ -16,6 +17,10 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity);
 void updateTextureUniform(ShaderProgram* shader, entt::entity entity);
 void updateNormalMapUniform(ShaderProgram* shader, InstancedMesh& mesh);
 void updateAlphaMapUniform(ShaderProgram* shader, InstancedMesh& mesh);
+void updateNormalMapUniform(ShaderProgram* shader, Mesh& mesh);
+void updateSpecularMapUniform(ShaderProgram* shader, Mesh& mesh);
+void updateEmissiveMapUniform(ShaderProgram* shader, Mesh& mesh);
+void updateShininessMapUniform(ShaderProgram* shader, Mesh& mesh);
 glm::mat4 calculateModelMatrix(entt::entity entity);
 
 void updateUniform(const UniformData& uniform, ShaderProgram* shader);

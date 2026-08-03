@@ -5,7 +5,7 @@
 struct TerrainConfig {
     // Mutable at runtime via the debug panel's Terrain tab (ChunkManager::regenerateTerrain()
     // rebuilds every GL/collision structure sized off this value when it changes).
-    inline static int triangleCount = 16;
+    inline static int triangleCount = 32;
     inline static constexpr bool useTriangleStrips = true;
     inline static constexpr int gridSize = 512;
     inline static constexpr int gridResolution = 2;

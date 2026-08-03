@@ -5,8 +5,7 @@
 #include "rendering/KinematicController.hpp"
 #include "rendering/MovementController.hpp"
 
-
-class AudioManager;
+class AudioController;
 class CollisionManager;
 class EnvironmentManager;
 class ChunkManager;
@@ -40,7 +39,7 @@ class Core {
     SystemKeyBinder systemKeyBinder;
 
     static TextureManager& Textures();
-    static AudioManager& Audio();
+    static AudioController& Audio();
     static CollisionManager& Collision();
     static EnvironmentManager& Environment();
     static ChunkManager& Chunk();
@@ -73,7 +72,7 @@ extern KeyHandling& Keyboard;
 extern MouseHandling& Mouse;
 extern InputHandler& Input;
 extern DisplayManager& Display;
-extern AudioManager& Audio;
+extern AudioController& Audio;
 extern TextureManager& Textures;
 extern ModuleManager& Modules;
 extern EnemyManager& Enemies;

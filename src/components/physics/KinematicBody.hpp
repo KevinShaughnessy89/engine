@@ -2,6 +2,9 @@
 
 #include "components/collision/ShapeData.hpp"
 
+enum class MovementState { RUN, WALK };
+enum class MovementDirection { NONE, FORWARD, BACKWARD };
+
 // Movement/collision state for anything driven directly by input rather than force integration
 // (the player character's body) -- position, grounding, and the collider used to resolve against
 // the world via KinematicResolver.
@@ -14,10 +17,12 @@ struct KinematicBody {
     glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     float yaw = 0.0f;  // facing, independent of ViewState.yaw -- a body only turns, it doesn't
                        // pitch; written by MovementController::setYaw in FIXED mode only
-    glm::vec3 deltaPos{0.0f};  // per-frame requested movement; written by MovementController,
-                               // consumed and reset by KinematicController::update
-    float movementIntent = 0.0f;  // set by MovementController::applyMovement, gates Walk vs Idle
-                                   // selection; consumed and reset by CharacterController::update
+    glm::vec3 deltaPos{0.0f};     // per-frame requested movement; written by MovementController,
+                                  // consumed and reset by KinematicController::update
+    MovementDirection movementDirection = MovementDirection::NONE;  // set by MovementController's
+                                  // move* functions, selects Walk/Run clip direction; consumed
+                                  // and reset by CharacterController::update
+    MovementState movementState = MovementState::RUN;
 
     float speed = 4000.0f;
     float verticalVelocity = 0.0f;

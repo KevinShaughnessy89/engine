@@ -27,6 +27,9 @@ Mesh::Mesh(std::vector<MeshVertex>&& vertices, std::vector<unsigned int>&& indic
       meshSetup(false) {
     hasNormalMap = hasNormalMapTexture(this->textures);
     hasAlphaMapTexture(this->textures);
+    hasSpecularMap = hasSpecularMapTexture(this->textures);
+    hasEmissiveMap = hasEmissiveMapTexture(this->textures);
+    hasShininessMap = hasShininessMapTexture(this->textures);
     if (std::any_of(this->textures.begin(), this->textures.end(),
                     [](Texture* t) { return t == nullptr; })) {
         std::cout << "Warning: texture is null or textures vector is empty." << std::endl;
@@ -57,6 +60,21 @@ bool Mesh::hasNormalMapTexture(const std::vector<Texture*>& textures) {
 bool Mesh::hasAlphaMapTexture(const std::vector<Texture*>& textures) {
     return std::any_of(textures.begin(), textures.end(),
                        [](Texture* t) { return t && t->uniform == "textureAlpha"; });
+}
+
+bool Mesh::hasSpecularMapTexture(const std::vector<Texture*>& textures) {
+    return std::any_of(textures.begin(), textures.end(),
+                       [](Texture* t) { return t && t->uniform == "textureSpecular"; });
+}
+
+bool Mesh::hasEmissiveMapTexture(const std::vector<Texture*>& textures) {
+    return std::any_of(textures.begin(), textures.end(),
+                       [](Texture* t) { return t && t->uniform == "textureEmissive"; });
+}
+
+bool Mesh::hasShininessMapTexture(const std::vector<Texture*>& textures) {
+    return std::any_of(textures.begin(), textures.end(),
+                       [](Texture* t) { return t && t->uniform == "textureShininess"; });
 }
 
 Mesh::Mesh(std::vector<MeshVertex>&& vertices)

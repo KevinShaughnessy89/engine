@@ -31,9 +31,6 @@ void KinematicController::updateBody(entt::entity entity, double deltaTime) {
     auto& body = Registry.get<KinematicBody>(entity);
     auto& skeleton = Registry.get<SkeletonComponent>(entity);
 
-    float stopThreshold = 0.01f;
-    float lerpFactor = 150.f;
-
     auto& view = Registry.get<ViewState>(CameraController::activeCamera);
     auto& cameraState = Registry.get<CameraState>(CameraController::activeCamera);
 
@@ -78,14 +75,7 @@ void KinematicController::updateBody(entt::entity entity, double deltaTime) {
         body.targetPosition, combinedCandidates, body, deltaTime);
 
     body.isGrounded = resolvedConstraint.isGrounded;
-    glm::vec3 diff = resolvedConstraint.position - body.position;
-
-    if (glm::dot(diff, diff) > stopThreshold * stopThreshold) {
-        float alpha = 1.0f - std::exp(-lerpFactor * deltaTime);
-        body.position += diff * alpha;
-    } else {
-        body.position = resolvedConstraint.position;
-    }
+    body.position = resolvedConstraint.position;
 
     body.velocity = (body.position - body.previousPosition) / float(deltaTime);
     body.collisionSphere.currentCenter = body.position;

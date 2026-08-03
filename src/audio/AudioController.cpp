@@ -1,38 +1,36 @@
+#include "AudioController.hpp"
+
 #include "core/PrecompiledHeader.hpp"
-#include "AudioManager.hpp"
 
-AudioManager::AudioManager() : system(nullptr) {
-
+AudioController::AudioController() : system(nullptr) {
 }
 
-AudioManager::~AudioManager() {
+AudioController::~AudioController() {
     cleanup();
 }
 
-bool AudioManager::init() {
-
+void AudioController::init() {
     FMOD_RESULT result = FMOD::System_Create(&system);
-    
+
     if (result != FMOD_OK) {
         std::cerr << "Error initializing FMOD\n";
-        return false;
+        return;
     }
 
     result = system->init(32, FMOD_INIT_NORMAL, nullptr);
-    return result == FMOD_OK;
-
 }
 
-void AudioManager::update() {
+void AudioController::update() {
     if (system) {
         system->update();
     }
 }
 
-bool AudioManager::loadSound(const std::string& name, const std::string& filename, bool is3D, bool isLooping) {
+void AudioController::loadSound(const std::string& name, const std::string& filename, bool is3D,
+                                bool isLooping) {
     if (soundMap.find(name) != soundMap.end()) {
-        std::cerr << "Sound file " << name << " already exists\n";
-        return false;
+        std::cerr << "Sound file " << name << " load attempt but it already exists.\n";
+        return;
     }
 
     FMOD_MODE mode = FMOD_DEFAULT;
@@ -44,14 +42,13 @@ bool AudioManager::loadSound(const std::string& name, const std::string& filenam
 
     if (result != FMOD_OK) {
         std::cerr << "Error creating sound " << name << std::endl;
-        return false;
+        return;
     }
 
     soundMap[name] = sound;
-    return true;
 }
 
-void AudioManager::playSound(const std::string& name) {
+void AudioController::playSound(const std::string& name) {
     auto it = soundMap.find(name);
     if (it != soundMap.end()) {
         FMOD::Channel* channel = nullptr;
@@ -59,14 +56,15 @@ void AudioManager::playSound(const std::string& name) {
     }
 }
 
-void AudioManager::stopSound(const std::string& name) {
-
+void AudioController::stopSound(const std::string& name) {
 }
 
-void AudioManager::cleanup() {
-   for (auto& pair : soundMap) {
+void AudioController::cleanup() {
+    for (auto& pair : soundMap) {
         if (pair.second) {
             pair.second->release();
+            delete pair.second;
+            pair.second = nullptr;
         }
     }
     soundMap.clear();
@@ -74,5 +72,7 @@ void AudioManager::cleanup() {
     if (system) {
         system->close();
         system->release();
+        delete system;
+        system = nullptr;
     }
 }

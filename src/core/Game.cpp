@@ -6,7 +6,7 @@
 #include "Config.hpp"
 #include "Core.hpp"
 #include "FrameCounter.hpp"
-#include "audio/AudioManager.hpp"
+#include "audio/AudioController.hpp"
 #include "character/CharacterController.hpp"
 #include "collision/CollisionManager.hpp"
 #include "components/collision/ShapeData.hpp"

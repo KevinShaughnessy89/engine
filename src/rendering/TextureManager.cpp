@@ -130,7 +130,8 @@ void TextureManager::removeTexture(const std::string& name) {
         delete it->second;   // Free the memory of the Texture object
         textures.erase(it);  // Remove the entry from the map
     } else {
-        std::cout << "Warning: texture " << name << " not found for removal." << std::endl;
+        std::cout << "TextureManager warning: texture " << name << " not found for removal."
+                  << std::endl;
     }
 }
 
@@ -201,11 +202,14 @@ Texture* TextureManager::getTexture(const std::string& name) {
         if (it->second) {
             return it->second;
         }
-        std::cout << "Warning: texture pointer is null for: " << textureName << std::endl;
+        std::cout << "TextureManager warning: texture pointer is null for: " << textureName
+                  << std::endl;
         return nullptr;
     } else {
-        std::cout << "Warning: texture " << textureName << " not found." << std::endl;
+        std::cout << "TextureManager warning: texture " << textureName << " not found."
+                  << std::endl;
     }
+
     return nullptr;
 }
 

@@ -361,7 +361,13 @@ void Renderer::renderBatches(double deltaTime) {
                                                                : chunkRenderable->glStateFlags);
 
             if (renderable) {
-                renderable->model->render(shader, TextureState::firstFreeTextureID);
+                for (auto& mesh : renderable->model->meshes) {
+                    UniformUpdater::updateNormalMapUniform(shader, *mesh);
+                    UniformUpdater::updateSpecularMapUniform(shader, *mesh);
+                    UniformUpdater::updateEmissiveMapUniform(shader, *mesh);
+                    UniformUpdater::updateShininessMapUniform(shader, *mesh);
+                    mesh->render(shader, TextureState::firstFreeTextureID);
+                }
             } else {
                 chunkRenderable->model->render(shader, TextureState::firstFreeTextureID);
             }

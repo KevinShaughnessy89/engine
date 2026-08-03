@@ -21,7 +21,6 @@
 #include "rendering/Texture.hpp"
 #include "rendering/sky/SunHelper.hpp"
 
-
 namespace UniformUpdater {
 
 glm::mat4 calculateModelMatrix(entt::entity entity) {
@@ -53,6 +52,7 @@ glm::mat4 calculateModelMatrix(entt::entity entity) {
     }
 }
 
+static int noSpam = 0;
 void updateUniforms(ShaderProgram* shader, entt::entity entity) {
     auto uniforms = shader->uniformLocationCache;
     auto& view = Registry.get<ViewState>(CameraController::activeCamera);
@@ -63,20 +63,20 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity) {
     auto* terrainTreeImposter = Registry.try_get<TerrainTreeImposter>(entity);
 
     for (const auto& [name, location] : uniforms) {
-        if (location == -1) {
-            std::cerr << "Warning: uniform '" << name
-                      << "' doesn't exist or is not used in shader program. Did you forget to set "
-                         "an explicit Texture uniform?"
-                      << std::endl;
+        if (location == -1 && noSpam % 100 == 0) {
+            noSpam++;
+            std::cerr
+                << "Warning: uniform '" << name
+                << "'attempting to be updated but doesn't exist or is not used in shader program."
+                << std::endl;
             continue;
         }
 
         if (name == toCString(UniformName::View)) {
-            updateUniform(
-                UniformData(UniformName::View,
-                            glm::lookAtRH(view.position, view.position + view.forward,
-                                          CameraConstants::WORLD_UP_AXIS)),
-                shader);
+            updateUniform(UniformData(UniformName::View,
+                                      glm::lookAtRH(view.position, view.position + view.forward,
+                                                    CameraConstants::WORLD_UP_AXIS)),
+                          shader);
         }
         if (name == toCString(UniformName::Projection)) {
             updateUniform(UniformData(UniformName::Projection, DisplayState::perspectiveMatrix),
@@ -202,6 +202,26 @@ void updateNormalMapUniform(ShaderProgram* shader, InstancedMesh& mesh) {
 void updateAlphaMapUniform(ShaderProgram* shader, InstancedMesh& mesh) {
     if (!shader->uniformLocationCache.contains(toCString(UniformName::UseAlphaMap))) return;
     updateUniform(UniformData(UniformName::UseAlphaMap, mesh.hasAlphaMap ? 1 : 0), shader);
+}
+
+void updateNormalMapUniform(ShaderProgram* shader, Mesh& mesh) {
+    if (!shader->uniformLocationCache.contains(toCString(UniformName::UseNormalMap))) return;
+    updateUniform(UniformData(UniformName::UseNormalMap, mesh.hasNormalMap ? 1 : 0), shader);
+}
+
+void updateSpecularMapUniform(ShaderProgram* shader, Mesh& mesh) {
+    if (!shader->uniformLocationCache.contains(toCString(UniformName::UseSpecularMap))) return;
+    updateUniform(UniformData(UniformName::UseSpecularMap, mesh.hasSpecularMap ? 1 : 0), shader);
+}
+
+void updateEmissiveMapUniform(ShaderProgram* shader, Mesh& mesh) {
+    if (!shader->uniformLocationCache.contains(toCString(UniformName::UseEmissiveMap))) return;
+    updateUniform(UniformData(UniformName::UseEmissiveMap, mesh.hasEmissiveMap ? 1 : 0), shader);
+}
+
+void updateShininessMapUniform(ShaderProgram* shader, Mesh& mesh) {
+    if (!shader->uniformLocationCache.contains(toCString(UniformName::UseShininessMap))) return;
+    updateUniform(UniformData(UniformName::UseShininessMap, mesh.hasShininessMap ? 1 : 0), shader);
 }
 
 void updateUBO(GLuint ubo, const void* data, size_t size) {

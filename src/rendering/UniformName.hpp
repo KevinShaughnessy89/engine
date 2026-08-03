@@ -34,6 +34,9 @@ enum class UniformName : int {
     UseAlphaMap,
     SkinSlot,
     Tint,
+    UseSpecularMap,
+    UseEmissiveMap,
+    UseShininessMap,
     Count
 };
 
@@ -43,7 +46,8 @@ inline constexpr const char* UniformNameStrings[static_cast<int>(UniformName::Co
     "sunColor",        "intensity",       "lightPos",        "useNormalMap",     "view",
     "projection",      "shadowMapArray",  "topColor",        "horizonColor",     "bottomColor",
     "skyColorAverage", "irradianceMap",   "gridRes",         "treeAtlasTexture", "ssaoBlurTexture",
-    "screenWidth",     "screenHeight",    "useAlphaMap",     "skinSlot",         "tint"};
+    "screenWidth",     "screenHeight",    "useAlphaMap",     "skinSlot",         "tint",
+    "useSpecularMap",  "useEmissiveMap",  "useShininessMap"};
 
 inline constexpr const char* toCString(UniformName name) {
     return UniformNameStrings[static_cast<int>(name)];

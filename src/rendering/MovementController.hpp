@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CameraConstants.hpp"
+#include "components/physics/KinematicBody.hpp"
 #include "core/KeyObserver.hpp"
 #include "core/MouseObserver.hpp"
 
@@ -11,6 +12,7 @@ class KeyHandling;
 // (via its own decoupled yaw) while FIXED.
 class MovementController : public KeyObserver, public MouseObserver {
     std::unordered_map<int, std::function<void(double)>> movementKeyBindings;
+    std::unordered_map<int, std::function<void()>> keyEventBindings;
 
    public:
     MovementController();
@@ -24,6 +26,8 @@ class MovementController : public KeyObserver, public MouseObserver {
     void moveBackward(double deltaTime);
     void moveLeft(double deltaTime);
     void moveRight(double deltaTime);
+    void toggleMovementState();
+    void toggleFreelook();
     void setYaw(float radians);
     void setPitch(float radians);
 
@@ -31,6 +35,9 @@ class MovementController : public KeyObserver, public MouseObserver {
 
    private:
     void insertCallbackFunction(int key, void (MovementController::*function)(double));
+    void insertKeyEventCallbackFunction(int key, void (MovementController::*function)());
     void setMovementKeyBindings();
+    void setKeyEventBindings();
     void applyMovement(const glm::vec3& freeVector, double deltaTime);
+    void applyDirection(MovementDirection direction);
 };

@@ -266,37 +266,28 @@ float bilerpHeightAt(const std::vector<float>& heightMap, int size, float x, flo
     float heightMapX = (x - minX) / spacing + 1.0f;
     float heightMapZ = (z - minZ) / spacing + 1.0f;
 
-    // Get the integer coordinates of the bottom-left texel
-    int x0 = static_cast<int>(std::floor(heightMapX));
-    int z0 = static_cast<int>(std::floor(heightMapZ));
-    int x1 = x0 + 1;
-    int z1 = z0 + 1;
-
-    // Clamp coordinates to valid heightmap bounds
-    x0 = std::clamp(x0, 0, size - 1);
-    x1 = std::clamp(x1, 0, size - 1);
-    z0 = std::clamp(z0, 0, size - 1);
-    z1 = std::clamp(z1, 0, size - 1);
+    // Get the integer coordinates of the top-left texel, clamped so x0+1/z0+1 stay in bounds.
+    int x0 = std::clamp(static_cast<int>(std::floor(heightMapX)), 0, size - 2);
+    int z0 = std::clamp(static_cast<int>(std::floor(heightMapZ)), 0, size - 2);
 
     // Calculate fractional offsets (0.0 to 1.0)
-    float fx = heightMapX - std::floor(heightMapX);
-    float fz = heightMapZ - std::floor(heightMapZ);
+    float fx = std::clamp(heightMapX - std::floor(heightMapX), 0.0f, 1.0f);
+    float fz = std::clamp(heightMapZ - std::floor(heightMapZ), 0.0f, 1.0f);
 
     // Sample the four corner heights
-    float h00 = heightMap[z0 * size + x0];  // bottom-left
-    float h10 = heightMap[z0 * size + x1];  // bottom-right
-    float h01 = heightMap[z1 * size + x0];  // top-left
-    float h11 = heightMap[z1 * size + x1];  // top-right
+    float h00 = heightMap[z0 * size + x0];            // top-left
+    float h10 = heightMap[z0 * size + x0 + 1];         // top-right
+    float h01 = heightMap[(z0 + 1) * size + x0];       // bottom-left
+    float h11 = heightMap[(z0 + 1) * size + x0 + 1];   // bottom-right
 
-    // Bilinear interpolation
-    // First interpolate along X axis
-    float h0 = h00 * (1.0f - fx) + h10 * fx;  // bottom edge
-    float h1 = h01 * (1.0f - fx) + h11 * fx;  // top edge
-
-    // Then interpolate along Z axis
-    float height = h0 * (1.0f - fz) + h1 * fz;
-
-    return height;
+    // Interpolate on whichever triangle plane the mesh actually uses for this quad (split along
+    // the topRight-bottomLeft diagonal, matching generateTerrainTriangles), instead of a bilinear
+    // blend of all 4 corners -- bilinear introduces a curved fx*fz term that diverges from the
+    // flat mesh triangles whenever the corners aren't coplanar, causing grounding to float/sink.
+    if (fx + fz <= 1.0f) {
+        return h00 + fx * (h10 - h00) + fz * (h01 - h00);
+    }
+    return h11 + (1.0f - fx) * (h01 - h11) + (1.0f - fz) * (h10 - h11);
 }
 
 glm::vec3 getNormalAt(float worldX, float worldZ, float epsilon) {

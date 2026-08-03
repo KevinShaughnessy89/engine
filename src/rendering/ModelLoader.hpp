@@ -48,11 +48,12 @@ class ModelLoader {
     InstancedRenderable& getInstancedRenderable(const std::string& name, int index = 0);
     entt::entity getEntity(const std::string& name, int index = 0);
     void PrintScene(const aiScene* scene, bool detailed = true);
-    void PrintNode(const aiNode* node, int depth = 0, bool detailed = true);
+    void PrintNode(const aiScene* scene, const aiNode* node, int depth = 0, bool detailed = true);
     void PrintMeshSummary(const aiScene* scene, bool detailed = true);
     void PrintMaterialSummary(const aiScene* scene);
     void PrintSceneMetadata(const aiScene* scene);
     void PrintMetadataEntry(const aiMetadata* metadata, unsigned i);
+    void PrintTextureTypes(const aiMaterial* material);
 
     std::vector<std::unique_ptr<Model>> models;
     std::vector<std::unique_ptr<InstancedModel>> instancedModels;
@@ -82,7 +83,8 @@ class ModelLoader {
     void createMesh(InstancedModel* model, std::vector<MeshVertex>& vertices,
                     std::vector<unsigned int>& indices, std::vector<Texture*>& textures,
                     std::string material, size_t materialIndex);
-    std::vector<Texture*> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
+    std::vector<Texture*> loadMaterialTextures(aiMaterial* mat, const aiScene* scene,
+                                               aiTextureType type);
     Material extractMaterial(aiMaterial* material);
     void loadEmbeddedTextures(const aiScene* scene);
     Texture* createTextureFromEmbedded(const aiTexture* tex, unsigned int index);

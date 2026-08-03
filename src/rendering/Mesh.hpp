@@ -24,6 +24,9 @@ class Mesh {
         this->materialIndex = other.materialIndex;
         this->meshSetup = other.meshSetup;
         this->hasNormalMap = other.hasNormalMap;
+        this->hasSpecularMap = other.hasSpecularMap;
+        this->hasEmissiveMap = other.hasEmissiveMap;
+        this->hasShininessMap = other.hasShininessMap;
     }
     Mesh& operator=(const Mesh&) = delete;
     Mesh(Mesh&& other) noexcept
@@ -35,7 +38,10 @@ class Mesh {
           textures(std::move(other.textures)),
           materialIndex(other.materialIndex),
           meshSetup(other.meshSetup),
-          hasNormalMap(other.hasNormalMap) {
+          hasNormalMap(other.hasNormalMap),
+          hasSpecularMap(other.hasSpecularMap),
+          hasEmissiveMap(other.hasEmissiveMap),
+          hasShininessMap(other.hasShininessMap) {
         other.VAO = 0;
         other.VBO = 0;
         other.EBO = 0;
@@ -55,6 +61,9 @@ class Mesh {
             materialIndex = other.materialIndex;
             meshSetup = other.meshSetup;
             hasNormalMap = other.hasNormalMap;
+            hasSpecularMap = other.hasSpecularMap;
+            hasEmissiveMap = other.hasEmissiveMap;
+            hasShininessMap = other.hasShininessMap;
 
             // Reset other so it won't delete our resources
             other.VAO = 0;
@@ -77,6 +86,9 @@ class Mesh {
     void setUseTriangleStrips(bool value) { this->useTriangleStrips = value; }
     static bool hasNormalMapTexture(const std::vector<Texture*>& textures);
     static bool hasAlphaMapTexture(const std::vector<Texture*>& textures);
+    static bool hasSpecularMapTexture(const std::vector<Texture*>& textures);
+    static bool hasEmissiveMapTexture(const std::vector<Texture*>& textures);
+    static bool hasShininessMapTexture(const std::vector<Texture*>& textures);
     std::vector<glm::vec4> getPositions();
     std::vector<glm::vec3> getNormals();
     std::vector<glm::vec2> getTexCoords();
@@ -92,6 +104,9 @@ class Mesh {
     bool meshSetup = false;
     bool useTriangleStrips = false;
     bool hasNormalMap = false;
+    bool hasSpecularMap = false;
+    bool hasEmissiveMap = false;
+    bool hasShininessMap = false;
 
     void cleanUp();
 };

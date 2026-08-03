@@ -397,7 +397,9 @@ void DebugPanel::renderDebugPanel() {
                 KinematicBody& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
                 ImGui::Text("Character Position: (%.2f, %.2f, %.2f)", body.position.x,
                            body.position.y, body.position.z);
-                ImGui::DragFloat("Character Speed (FIXED)", &body.speed, 1.0f, 0.0f, 2000.0f);
+                // Also scales AnimationState::playbackSpeed for the Walk clip -- see
+                // CharacterController::update.
+                ImGui::DragFloat("Character Speed (FIXED)", &body.speed, 10.0f, 0.0f, 8000.0f);
             }
 
             ImGui::Spacing();

@@ -15,6 +15,7 @@
 
 MovementController::MovementController() {
     setMovementKeyBindings();
+    setKeyEventBindings();
 }
 
 MovementController::~MovementController() {
@@ -26,6 +27,11 @@ void MovementController::insertCallbackFunction(int key,
         key, [this, function](double deltaTime) { (this->*function)(deltaTime); });
 }
 
+void MovementController::insertKeyEventCallbackFunction(int key,
+                                                        void (MovementController::*function)()) {
+    keyEventBindings.emplace(key, [this, function]() { (this->*function)(); });
+}
+
 void MovementController::setMovementKeyBindings() {
     insertCallbackFunction(GLFW_KEY_W, &MovementController::moveForward);
     insertCallbackFunction(GLFW_KEY_A, &MovementController::moveLeft);
@@ -33,10 +39,21 @@ void MovementController::setMovementKeyBindings() {
     insertCallbackFunction(GLFW_KEY_D, &MovementController::moveRight);
 }
 
+void MovementController::setKeyEventBindings() {
+    insertKeyEventCallbackFunction(GLFW_KEY_F, &MovementController::toggleFreelook);
+    insertKeyEventCallbackFunction(GLFW_KEY_LEFT_SHIFT, &MovementController::toggleMovementState);
+}
+
 void MovementController::onKeyEvent(int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_F && action == GLFW_PRESS) {
-        CameraController::toggleFreelook();
+    if (action != GLFW_PRESS) return;
+    auto it = keyEventBindings.find(key);
+    if (it != keyEventBindings.end()) {
+        it->second();
     }
+}
+
+void MovementController::toggleFreelook() {
+    CameraController::toggleFreelook();
 }
 
 void MovementController::onContinuousInput(double deltaTime, const KeyHandling& keyHandler) {
@@ -98,11 +115,6 @@ void MovementController::setYaw(float radians) {
     view.yaw = movementWrapAngle(view.yaw);
 }
 
-// Small sentinel written (not accumulated) whenever a grounded move* fires this frame -- gates
-// Walk vs Idle clip selection in CharacterController::update without float-precision pitfalls
-// from comparing an accumulated value against zero.
-constexpr float movementIntentEpsilon = 0.01f;
-
 // WASD drives exactly one thing depending on mode: the free camera in FREE, or the character's
 // body in FIXED -- never both, so the unattended one doesn't drift off on its own. In FIXED,
 // position itself now comes entirely from the animation clip's root motion (see
@@ -112,9 +124,16 @@ void MovementController::applyMovement(const glm::vec3& freeVector, double delta
     if (camState.cameraMode == CameraMode::FREE) {
         auto& view = Registry.get<ViewState>(CameraController::activeCamera);
         view.deltaPos += freeVector * view.speed * (float)deltaTime;
-    } else {
+    }
+}
+
+// Only forward/backward select a clip direction for now -- the Maximo strafe clips play as a
+// few steps backwards rather than an actual strafe, so left/right don't drive animation yet.
+void MovementController::applyDirection(MovementDirection direction) {
+    auto& camState = Registry.get<CameraState>(CameraController::activeCamera);
+    if (camState.cameraMode != CameraMode::FREE) {
         auto& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
-        body.movementIntent = movementIntentEpsilon;
+        body.movementDirection = direction;
     }
 }
 
@@ -123,6 +142,7 @@ void MovementController::moveForward(double deltaTime) {
     glm::vec3 forward =
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_FORWARD_AXIS));
     applyMovement(forward, deltaTime);
+    applyDirection(MovementDirection::FORWARD);
 }
 
 void MovementController::moveBackward(double deltaTime) {
@@ -130,6 +150,7 @@ void MovementController::moveBackward(double deltaTime) {
     glm::vec3 forward =
         glm::normalize(glm::rotate(view.orientation, CameraConstants::WORLD_FORWARD_AXIS));
     applyMovement(-forward, deltaTime);
+    applyDirection(MovementDirection::BACKWARD);
 }
 
 void MovementController::moveRight(double deltaTime) {
@@ -141,6 +162,12 @@ void MovementController::moveRight(double deltaTime) {
     glm::vec3 up = glm::normalize(glm::cross(right, forward));
     glm::vec3 freeVector = glm::cross(forward, up);
     applyMovement(freeVector, deltaTime);
+}
+
+void MovementController::toggleMovementState() {
+    auto& body = Registry.get<KinematicBody>(CharacterController::activeCharacter);
+    body.movementState =
+        body.movementState == MovementState::RUN ? MovementState::WALK : MovementState::RUN;
 }
 
 void MovementController::moveLeft(double deltaTime) {
