@@ -63,8 +63,7 @@ void updateUniforms(ShaderProgram* shader, entt::entity entity) {
     auto* terrainTreeImposter = Registry.try_get<TerrainTreeImposter>(entity);
 
     for (const auto& [name, location] : uniforms) {
-        if (location == -1 && noSpam % 100 == 0) {
-            noSpam++;
+        if (location == -1 && noSpam++ % 100 == 0) {
             std::cerr
                 << "Warning: uniform '" << name
                 << "'attempting to be updated but doesn't exist or is not used in shader program."

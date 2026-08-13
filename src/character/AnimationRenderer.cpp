@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "IKFootCorrector.hpp"
 #include "components/rendering/AnimationState.hpp"
 #include "components/rendering/SkeletonComponent.hpp"
 
@@ -172,10 +173,21 @@ void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
 
     // skinMatrices doubles as scratch space for the global animated transforms (G_anim)
     // before being turned into the final skin matrices in the second pass below.
+    glm::mat4 leftFoot, rightFoot, leftKnee, rightKnee, leftHip, rightHip, pelvis;
     for (int i = 0; i < numBones; i++) {
         const BoneInfo& bone = skeleton.bones[i];
+        if (bone.name == "LeftFoot") leftFoot = M_anim[i];
+        if (bone.name == "RightFoot") rightFoot = M_anim[i];
+        if (bone.name == "LeftKnee") leftKnee = M_anim[i];
+        if (bone.name == "RightKnee") rightKnee = M_anim[i];
+        if (bone.name == "LeftHip") leftHip = M_anim[i];
+        if (bone.name == "RightHip") rightHip = M_anim[i];
+        if (bone.name == "Pelvis") pelvis = M_anim[i];
         skinMatrices[i] = bone.parentID == -1 ? M_anim[i] : skinMatrices[bone.parentID] * M_anim[i];
     }
+
+    IKFootCorrector::IKFootCorrect(leftFoot, rightFoot, leftKnee, rightKnee, leftHip, rightHip,
+                                   pelvis);
 
     for (int i = 0; i < numBones; i++) {
         skinMatrices[i] = skinMatrices[i] * skeleton.bones[i].offsetMatrix;

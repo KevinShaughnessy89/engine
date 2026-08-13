@@ -112,7 +112,7 @@ void ModelLoader::create(const std::string& name, ModelData& data) {
         return;
     }
 
-    // PrintScene(scene, true);
+    PrintScene(scene, true);
 
     embeddedTextures.clear();
     if (scene->HasTextures()) {
@@ -509,8 +509,7 @@ Texture* ModelLoader::createTextureFromEmbedded(const aiTexture* tex, unsigned i
     TextureDataOrigin origin =
         tex->mHeight != 0 ? TextureDataOrigin::HeapArray : TextureDataOrigin::Stbi;
     TextureData textureData(name, name, width, height, channels, decoded, origin);
-    auto texture =
-        std::make_unique<Texture2D>(std::vector<TextureData*>({&textureData}), name);
+    auto texture = std::make_unique<Texture2D>(std::vector<TextureData*>({&textureData}), name);
     Texture* raw = texture.get();
     // Owned by TextureManager from here on (same lifetime model as file-loaded textures) so this
     // pointer stays valid for every Mesh that references it, even after embeddedTextures is
