@@ -27,7 +27,7 @@ class SunHelper {
     }
 
     static float calculateTimeOfDay() {
-        // return 0.4f;
+        return 0.7f;
         static TimePoint lastTime = Clock::now();
         static double currentTime = 100.0;
         static float dayDuration = 200.0f;

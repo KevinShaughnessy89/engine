@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "IKFootCorrector.hpp"
+#include "components/physics/KinematicBody.hpp"
 #include "components/rendering/AnimationState.hpp"
 #include "components/rendering/SkeletonComponent.hpp"
 #include "rendering/UniformUpdater.hpp"
@@ -151,7 +152,8 @@ glm::mat4 sampleBlendedChannels(const AnimationBlendState& blendState,
 
 void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
                          const AnimationState& animationState, float rawTime,
-                         std::span<glm::mat4> skinMatrices, const glm::mat4& modelMatrix) {
+                         std::span<glm::mat4> skinMatrices, const glm::mat4& modelMatrix,
+                         bool isGrounded, float horizontalSpeed) {
     const int numBones = skeleton.bones.size();
 
     std::vector<glm::mat4>& M_anim = skeleton.animatedTransforms;
@@ -215,7 +217,8 @@ void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
     }
 
     IKFootCorrector::IKFootCorrect(skinMatrices, skeleton.bones, leftFootIdx, rightFootIdx,
-                                   leftKneeIdx, rightKneeIdx, leftHipIdx, rightHipIdx, modelMatrix);
+                                   leftKneeIdx, rightKneeIdx, leftHipIdx, rightHipIdx, modelMatrix,
+                                   isGrounded, horizontalSpeed);
 
     for (int i = 0; i < numBones; i++) {
         skinMatrices[i] = skinMatrices[i] * skeleton.bones[i].offsetMatrix;
@@ -250,8 +253,17 @@ void updateAnimationState(float deltaTime, GLuint ssbo) {
             allSkinMatrices.data() + entityIndex * AnimationRenderer::MAX_BONES_PER_SKELETON;
         std::span<glm::mat4> skinMatricesSpan(slice, skeleton.bones.size());
         glm::mat4 modelMatrix = UniformUpdater::calculateModelMatrix(entity);
+
+        // Without a body there's no motion to read, so leave the solver on its penetration fallback.
+        bool isGrounded = true;
+        float horizontalSpeed = std::numeric_limits<float>::max();
+        if (const auto* body = Registry.try_get<KinematicBody>(entity)) {
+            isGrounded = body->isGrounded;
+            horizontalSpeed = glm::length(glm::vec2(body->velocity.x, body->velocity.z));
+        }
+
         computeSkinMatrices(skeleton, animationClip, animationState, rawTime, skinMatricesSpan,
-                           modelMatrix);
+                           modelMatrix, isGrounded, horizontalSpeed);
 
         entityIndex++;
     }

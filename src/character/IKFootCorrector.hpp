@@ -8,7 +8,10 @@
 namespace IKFootCorrector {
 
 inline const glm::vec3 fallbackKneeForward(0.f, 0.f, 1.f);
-inline const float maxFootTilt = glm::radians(35.f);
+// Speeds, in leg lengths per second, bounding the fade from a fully planted stance down to
+// penetration-only correction. Idle shifting must stay under the first, locomotion over the second.
+inline const float stationarySpeed = 0.5f;
+inline const float locomotionSpeed = 1.5f;
 
 struct LegChain {
     int hipID = -1;
@@ -202,30 +205,40 @@ inline void solveLeg(std::span<glm::mat4> skinMatrices, const std::vector<BoneIn
 }
 
 inline void alignFootToNormal(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
-                              int footID, const glm::vec3& terrainNormal) {
+                              int footID, const glm::vec3& terrainNormal, float weight) {
     glm::vec3 localUp(0.f, 1.f, 0.f);
-    float slope = std::acos(glm::clamp(glm::dot(localUp, terrainNormal), -1.f, 1.f));
+    float slope = weight * std::acos(glm::clamp(glm::dot(localUp, terrainNormal), -1.f, 1.f));
     if (slope < 1e-5f) return;
 
     glm::vec3 axis = glm::cross(localUp, terrainNormal);
     float axisLength = glm::length(axis);
     if (axisLength < 1e-6f) return;
 
-    glm::mat3 tilt =
-        glm::mat3(glm::rotate(glm::mat4(1.f), glm::min(slope, maxFootTilt), axis / axisLength));
+    glm::mat3 tilt = glm::mat3(glm::rotate(glm::mat4(1.f), slope, axis / axisLength));
     rotateSubtree(skinMatrices, bones, footID, tilt, glm::vec3(skinMatrices[footID][3]));
 }
 
 inline void IKFootCorrect(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
                           int leftFootIdx, int rightFootIdx, int leftKneeIdx, int rightKneeIdx,
-                          int leftHipIdx, int rightHipIdx, const glm::mat4& modelMatrix) {
+                          int leftHipIdx, int rightHipIdx, const glm::mat4& modelMatrix,
+                          bool isGrounded, float horizontalSpeed) {
     if (leftFootIdx < 0 || rightFootIdx < 0 || leftKneeIdx < 0 || rightKneeIdx < 0 ||
         leftHipIdx < 0 || rightHipIdx < 0) {
         return;
     }
+    if (!isGrounded) return;
 
     LegChain leftLeg = buildLegChain(bones, skinMatrices, leftHipIdx, leftKneeIdx, leftFootIdx);
     LegChain rightLeg = buildLegChain(bones, skinMatrices, rightHipIdx, rightKneeIdx, rightFootIdx);
+
+    // A standing pose is the one the animator posed deliberately, so hold both feet to the ground;
+    // once the character is moving, only penetration justifies touching a foot.
+    float modelScale = glm::length(glm::vec3(modelMatrix[0]));
+    float legLength = modelScale * glm::min(leftLeg.thighLength + leftLeg.shinLength,
+                                            rightLeg.thighLength + rightLeg.shinLength);
+    float legLengthsPerSecond = legLength > 1e-5f ? horizontalSpeed / legLength : locomotionSpeed;
+    float stationaryWeight =
+        1.f - glm::smoothstep(stationarySpeed, locomotionSpeed, legLengthsPerSecond);
 
     glm::mat4 invModel = glm::inverse(modelMatrix);
     glm::mat3 invModelRotation = glm::mat3(invModel);
@@ -252,35 +265,41 @@ inline void IKFootCorrect(std::span<glm::mat4> skinMatrices, const std::vector<B
 
     float leftAnkleTargetWorld = leftTerrainHeightWorld + leftLeg.ankleHeight;
     float rightAnkleTargetWorld = rightTerrainHeightWorld + rightLeg.ankleHeight;
-    float deltaLeftFoot = leftAnkleTargetWorld - leftFootWorld.y;
-    float deltaRightFoot = rightAnkleTargetWorld - rightFootWorld.y;
 
-    float swingThreshold = 0.15f * glm::min(leftLeg.shinLength, rightLeg.shinLength);
-    float footHeightDifference = leftFootLocal.y - rightFootLocal.y;
-    bool leftSwinging = footHeightDifference > swingThreshold;
-    bool rightSwinging = -footHeightDifference > swingThreshold;
-
-    float airborneTolerance = 0.5f * glm::min(leftLeg.shinLength, rightLeg.shinLength);
-    if (deltaLeftFoot < -airborneTolerance && deltaRightFoot < -airborneTolerance) {
+    // Positive means the ankle sits below its terrain-derived target, i.e. the foot has penetrated.
+    float leftPenetration = leftAnkleTargetWorld - leftFootWorld.y;
+    float rightPenetration = rightAnkleTargetWorld - rightFootWorld.y;
+    // Penetration is a hard constraint, so it overrides the speed fade; a floating foot only gets
+    // pulled down while the character is standing still.
+    float leftWeight = leftPenetration > 0.f ? 1.f : stationaryWeight;
+    float rightWeight = rightPenetration > 0.f ? 1.f : stationaryWeight;
+    if (leftWeight <= 0.f && rightWeight <= 0.f) {
         return;
     }
 
-    bool leftGrounded = !leftSwinging;
-    bool rightGrounded = !rightSwinging;
+    // Tilt needs its own weight ramped over ankle depth -- it scales an angle rather than a
+    // vanishing offset, so reusing the step above would snap the foot as it crosses the surface.
+    float ankleDepth =
+        glm::max(modelScale * glm::min(leftLeg.ankleHeight, rightLeg.ankleHeight), 1e-5f);
+    float leftTiltWeight =
+        glm::max(stationaryWeight, glm::clamp(leftPenetration / ankleDepth, 0.f, 1.f));
+    float rightTiltWeight =
+        glm::max(stationaryWeight, glm::clamp(rightPenetration / ankleDepth, 0.f, 1.f));
 
-    glm::vec3 leftTargetWorld(leftFootWorld.x, leftAnkleTargetWorld, leftFootWorld.z);
-    glm::vec3 rightTargetWorld(rightFootWorld.x, rightAnkleTargetWorld, rightFootWorld.z);
+    // Partial weight blends the target back toward where the animation already put the foot.
+    float leftTargetY = leftFootWorld.y + leftWeight * leftPenetration;
+    float rightTargetY = rightFootWorld.y + rightWeight * rightPenetration;
+    glm::vec3 leftTargetWorld(leftFootWorld.x, leftTargetY, leftFootWorld.z);
+    glm::vec3 rightTargetWorld(rightFootWorld.x, rightTargetY, rightFootWorld.z);
     glm::vec3 leftTargetLocal = glm::vec3(invModel * glm::vec4(leftTargetWorld, 1.f));
     glm::vec3 rightTargetLocal = glm::vec3(invModel * glm::vec4(rightTargetWorld, 1.f));
 
-    float pelvisOffset = 0.f;
-    if (leftGrounded && rightGrounded) {
-        pelvisOffset = std::min(deltaLeftFoot, deltaRightFoot);
-    } else if (leftGrounded) {
-        pelvisOffset = deltaLeftFoot;
-    } else if (rightGrounded) {
-        pelvisOffset = deltaRightFoot;
-    }
+    // The pelvis absorbs the shallowest correction; the legs bend off whatever difference is left.
+    float leftOffset = leftWeight * leftPenetration;
+    float rightOffset = rightWeight * rightPenetration;
+    float pelvisOffset = leftWeight > 0.f && rightWeight > 0.f
+                             ? std::min(leftOffset, rightOffset)
+                             : (leftWeight > 0.f ? leftOffset : rightOffset);
 
     auto reachInterval = [&](const LegChain& leg, const glm::vec3& targetLocal, float& low,
                              float& high) {
@@ -298,11 +317,11 @@ inline void IKFootCorrect(std::span<glm::mat4> skinMatrices, const std::vector<B
     float highestAllowed = std::numeric_limits<float>::max();
     float low = 0.f;
     float high = 0.f;
-    if (leftGrounded && reachInterval(leftLeg, leftTargetLocal, low, high)) {
+    if (leftWeight > 0.f && reachInterval(leftLeg, leftTargetLocal, low, high)) {
         lowestAllowed = glm::max(lowestAllowed, low);
         highestAllowed = glm::min(highestAllowed, high);
     }
-    if (rightGrounded && reachInterval(rightLeg, rightTargetLocal, low, high)) {
+    if (rightWeight > 0.f && reachInterval(rightLeg, rightTargetLocal, low, high)) {
         lowestAllowed = glm::max(lowestAllowed, low);
         highestAllowed = glm::min(highestAllowed, high);
     }
@@ -317,13 +336,13 @@ inline void IKFootCorrect(std::span<glm::mat4> skinMatrices, const std::vector<B
         boneMatrix[3].y += pelvisOffset;
     }
 
-    if (leftGrounded) {
+    if (leftWeight > 0.f) {
         solveLeg(skinMatrices, bones, leftLeg, leftTargetLocal);
-        alignFootToNormal(skinMatrices, bones, leftFootIdx, leftNormalLocal);
+        alignFootToNormal(skinMatrices, bones, leftFootIdx, leftNormalLocal, leftTiltWeight);
     }
-    if (rightGrounded) {
+    if (rightWeight > 0.f) {
         solveLeg(skinMatrices, bones, rightLeg, rightTargetLocal);
-        alignFootToNormal(skinMatrices, bones, rightFootIdx, rightNormalLocal);
+        alignFootToNormal(skinMatrices, bones, rightFootIdx, rightNormalLocal, rightTiltWeight);
     }
 }
 
