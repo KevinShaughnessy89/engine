@@ -1,108 +1,330 @@
 #pragma once
+#include <span>
+
+#include "character/AnimationModelLoader.hpp"
 #include "core/Core.hpp"
 #include "environment/ChunkManager.hpp"
 
 namespace IKFootCorrector {
 
-inline void solveLeg(glm::mat4& foot, glm::mat4& knee, glm::mat4& hip, const glm::vec3& target,
-                     float thighLength, float shinLength) {
-    glm::vec3 hipPos = glm::vec3(hip[3]);
-    glm::vec3 kneePos = glm::vec3(knee[3]);
-    glm::vec3 footPos = glm::vec3(foot[3]);
+inline const glm::vec3 fallbackKneeForward(0.f, 0.f, 1.f);
+inline const float maxFootTilt = glm::radians(35.f);
+
+struct LegChain {
+    int hipID = -1;
+    int kneeID = -1;
+    int footID = -1;
+    float thighLength = 0.f;
+    float shinLength = 0.f;
+    float ankleHeight = 0.f;
+    glm::vec3 localHingeAxis{0.f};
+};
+
+inline glm::vec3 perpendicularComponent(const glm::vec3& v, const glm::vec3& unitAxis) {
+    return v - glm::dot(v, unitAxis) * unitAxis;
+}
+
+inline glm::vec3 anyPerpendicular(const glm::vec3& unitAxis) {
+    glm::vec3 seed =
+        std::abs(unitAxis.x) < 0.9f ? glm::vec3(1.f, 0.f, 0.f) : glm::vec3(0.f, 1.f, 0.f);
+    return glm::normalize(glm::cross(unitAxis, seed));
+}
+
+inline bool isInSubtree(const std::vector<BoneInfo>& bones, int boneID, int ancestorID) {
+    for (int id = boneID; id != -1; id = bones[id].parentID) {
+        if (id == ancestorID) return true;
+    }
+    return false;
+}
+
+inline void rotateSubtree(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
+                          int rootBoneID, const glm::mat3& rotation, const glm::vec3& pivot) {
+    for (int i = 0; i < (int)bones.size(); i++) {
+        if (!isInSubtree(bones, i, rootBoneID)) continue;
+        glm::mat4& bone = skinMatrices[i];
+        glm::vec3 pivotOffset = glm::vec3(bone[3]) - pivot;
+        bone = glm::mat4(rotation * glm::mat3(bone));
+        bone[3] = glm::vec4(pivot + rotation * pivotOffset, 1.f);
+    }
+}
+
+inline glm::mat3 orthonormalBasis(const glm::vec3& primary, const glm::vec3& secondary) {
+    glm::vec3 x = glm::normalize(primary);
+    glm::vec3 y = perpendicularComponent(secondary, x);
+    y = glm::length(y) > 1e-5f ? glm::normalize(y) : anyPerpendicular(x);
+    return glm::mat3(x, y, glm::cross(x, y));
+}
+
+inline glm::mat4 bindGlobalTransform(const std::vector<BoneInfo>& bones, int boneID) {
+    glm::mat4 transform(1.f);
+    for (int id = boneID; id != -1; id = bones[id].parentID) {
+        transform = bones[id].localBindTransform * transform;
+    }
+    return transform;
+}
+
+inline int firstChildBone(const std::vector<BoneInfo>& bones, int parentID) {
+    for (int i = 0; i < (int)bones.size(); i++) {
+        if (bones[i].parentID == parentID) return i;
+    }
+    return -1;
+}
+
+// From the toes, not the bind knee offset - Mixamo T-pose knees are hyperextended backwards.
+inline glm::vec3 bindKneeForwardDirection(const std::vector<BoneInfo>& bones, int hipID,
+                                          int footID) {
+    glm::vec3 bindHip = glm::vec3(bindGlobalTransform(bones, hipID)[3]);
+    glm::vec3 bindFoot = glm::vec3(bindGlobalTransform(bones, footID)[3]);
+    glm::vec3 legAxis = bindFoot - bindHip;
+    float legLength = glm::length(legAxis);
+    int toeID = firstChildBone(bones, footID);
+    if (legLength < 1e-5f || toeID == -1) return fallbackKneeForward;
+
+    glm::vec3 bindToe = glm::vec3(bindGlobalTransform(bones, toeID)[3]);
+    glm::vec3 forward = perpendicularComponent(bindToe - bindFoot, legAxis / legLength);
+    return glm::length(forward) > 1e-3f * legLength ? glm::normalize(forward) : fallbackKneeForward;
+}
+
+// Hinge from the knee's own frame; the toes only pick between axes, they splay 19 degrees out.
+inline glm::vec3 localKneeHingeAxis(const std::vector<BoneInfo>& bones, int kneeID, int footID,
+                                    const glm::vec3& toeForward) {
+    glm::mat4 bindKnee = bindGlobalTransform(bones, kneeID);
+    glm::mat3 bindRotation = glm::mat3(bindKnee);
+    glm::vec3 bindFoot = glm::vec3(bindGlobalTransform(bones, footID)[3]);
+    glm::vec3 boneDirection = bindFoot - glm::vec3(bindKnee[3]);
+    if (glm::length(boneDirection) < 1e-5f) return glm::vec3(1.f, 0.f, 0.f);
+    boneDirection = glm::normalize(boneDirection);
+
+    int boneAxis = 0;
+    float strongestAlignment = -1.f;
+    for (int i = 0; i < 3; i++) {
+        float alignment = std::abs(glm::dot(glm::normalize(bindRotation[i]), boneDirection));
+        if (alignment > strongestAlignment) {
+            strongestAlignment = alignment;
+            boneAxis = i;
+        }
+    }
+
+    int hingeAxis = -1;
+    float weakestForward = 2.f;
+    for (int i = 0; i < 3; i++) {
+        if (i == boneAxis) continue;
+        float alignment = std::abs(glm::dot(glm::normalize(bindRotation[i]), toeForward));
+        if (alignment < weakestForward) {
+            weakestForward = alignment;
+            hingeAxis = i;
+        }
+    }
+
+    glm::vec3 localAxis(0.f);
+    localAxis[hingeAxis] = 1.f;
+    glm::vec3 bindHinge = glm::normalize(bindRotation * localAxis);
+    if (glm::dot(glm::cross(bindHinge, boneDirection), toeForward) < 0.f) {
+        localAxis[hingeAxis] = -1.f;
+    }
+    return localAxis;
+}
+
+inline float bindAnkleHeight(const std::vector<BoneInfo>& bones, int footID) {
+    float ankleY = bindGlobalTransform(bones, footID)[3].y;
+    float lowestY = ankleY;
+    for (int i = 0; i < (int)bones.size(); i++) {
+        if (!isInSubtree(bones, i, footID)) continue;
+        lowestY = glm::min(lowestY, bindGlobalTransform(bones, i)[3].y);
+    }
+    return ankleY - lowestY;
+}
+
+inline LegChain buildLegChain(const std::vector<BoneInfo>& bones,
+                              std::span<const glm::mat4> skinMatrices, int hipID, int kneeID,
+                              int footID) {
+    LegChain leg;
+    leg.hipID = hipID;
+    leg.kneeID = kneeID;
+    leg.footID = footID;
+
+    glm::vec3 hipPos = glm::vec3(skinMatrices[hipID][3]);
+    glm::vec3 kneePos = glm::vec3(skinMatrices[kneeID][3]);
+    glm::vec3 footPos = glm::vec3(skinMatrices[footID][3]);
+    leg.thighLength = glm::length(kneePos - hipPos);
+    leg.shinLength = glm::length(footPos - kneePos);
+    leg.ankleHeight = bindAnkleHeight(bones, footID);
+    leg.localHingeAxis =
+        localKneeHingeAxis(bones, kneeID, footID, bindKneeForwardDirection(bones, hipID, footID));
+    return leg;
+}
+
+inline void solveLeg(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
+                     const LegChain& leg, const glm::vec3& target) {
+    if (leg.thighLength < 1e-5f || leg.shinLength < 1e-5f) return;
+
+    glm::vec3 hipPos = glm::vec3(skinMatrices[leg.hipID][3]);
+    glm::vec3 kneePos = glm::vec3(skinMatrices[leg.kneeID][3]);
 
     glm::vec3 toTarget = target - hipPos;
-    float rawDist = glm::length(toTarget);
-    glm::vec3 targetDir = rawDist > 1e-5f ? toTarget / rawDist : glm::vec3(0.f, -1.f, 0.f);
-    // Clamp to what the leg can physically reach, and clamp the foot target to match
-    float targetDist = glm::min(rawDist, thighLength + shinLength - 0.001f);
+    float rawDistance = glm::length(toTarget);
+    glm::vec3 targetDir = rawDistance > 1e-5f ? toTarget / rawDistance : glm::vec3(0.f, -1.f, 0.f);
+
+    float minReach = std::abs(leg.thighLength - leg.shinLength) + 1e-4f;
+    float maxReach = glm::max(leg.thighLength + leg.shinLength - 1e-3f, minReach);
+    float targetDist = glm::clamp(rawDistance, minReach, maxReach);
     glm::vec3 reachableTarget = hipPos + targetDir * targetDist;
 
-    float cosHipAngle =
-        (thighLength * thighLength + targetDist * targetDist - shinLength * shinLength) /
-        (2.f * thighLength * targetDist);
+    float cosHipAngle = (leg.thighLength * leg.thighLength + targetDist * targetDist -
+                         leg.shinLength * leg.shinLength) /
+                        (2.f * leg.thighLength * targetDist);
     float hipAngle = std::acos(glm::clamp(cosHipAngle, -1.f, 1.f));
 
-    glm::vec3 hipToKnee = glm::normalize(kneePos - hipPos);
-    // NOTE: sign of this axis determines which way the hip swings to satisfy hipAngle - verify
-    // visually and flip (swap cross() argument order) if the knee bends the wrong direction.
-    glm::vec3 bendAxis = glm::cross(targetDir, hipToKnee);
-    float bendAxisLen = glm::length(bendAxis);
-    bendAxis = bendAxisLen > 1e-5f ? bendAxis / bendAxisLen : glm::vec3(1.f, 0.f, 0.f);
+    glm::vec3 hinge = glm::normalize(glm::mat3(skinMatrices[leg.kneeID]) * leg.localHingeAxis);
+    glm::vec3 pole = glm::cross(hinge, targetDir);
+    float poleLength = glm::length(pole);
+    if (poleLength < 1e-4f) return;
+    pole /= poleLength;
 
-    glm::vec3 newThighDir = glm::normalize(
-        glm::vec3(glm::rotate(glm::mat4(1.f), hipAngle, bendAxis) * glm::vec4(targetDir, 0.f)));
-    glm::vec3 newKneePos = hipPos + thighLength * newThighDir;
+    glm::vec3 newThighDir = std::cos(hipAngle) * targetDir + std::sin(hipAngle) * pole;
+    glm::vec3 newKneePos = hipPos + leg.thighLength * newThighDir;
     glm::vec3 newShinDir = glm::normalize(reachableTarget - newKneePos);
 
-    glm::vec3 hipDeltaAxis = glm::cross(hipToKnee, newThighDir);
-    if (glm::length(hipDeltaAxis) > 1e-5f) {
-        float hipDeltaAngle = std::acos(glm::clamp(glm::dot(hipToKnee, newThighDir), -1.f, 1.f));
-        hip = glm::rotate(hip, hipDeltaAngle, glm::normalize(hipDeltaAxis));
-    }
+    glm::vec3 bendNormal = glm::normalize(glm::cross(targetDir, pole));
+    glm::vec3 oldThighDir = glm::normalize(kneePos - hipPos);
+    glm::mat3 hipRotation = orthonormalBasis(newThighDir, bendNormal) *
+                            glm::transpose(orthonormalBasis(oldThighDir, hinge));
+    rotateSubtree(skinMatrices, bones, leg.hipID, hipRotation, hipPos);
 
-    glm::vec3 oldShinDir = glm::normalize(footPos - kneePos);
-    glm::vec3 kneeDeltaAxis = glm::cross(oldShinDir, newShinDir);
-    if (glm::length(kneeDeltaAxis) > 1e-5f) {
-        float kneeDeltaAngle = std::acos(glm::clamp(glm::dot(oldShinDir, newShinDir), -1.f, 1.f));
-        knee = glm::rotate(knee, kneeDeltaAngle, glm::normalize(kneeDeltaAxis));
-    }
-
-    knee[3] = glm::vec4(newKneePos, 1.f);
-    foot[3] = glm::vec4(reachableTarget, 1.f);
+    glm::vec3 hingeAfterHip =
+        glm::normalize(glm::mat3(skinMatrices[leg.kneeID]) * leg.localHingeAxis);
+    glm::vec3 shinDirAfterHip = glm::normalize(glm::vec3(skinMatrices[leg.footID][3]) -
+                                               glm::vec3(skinMatrices[leg.kneeID][3]));
+    float kneeAngle = std::atan2(glm::dot(glm::cross(shinDirAfterHip, newShinDir), hingeAfterHip),
+                                 glm::dot(shinDirAfterHip, newShinDir));
+    rotateSubtree(skinMatrices, bones, leg.kneeID,
+                  glm::mat3(glm::rotate(glm::mat4(1.f), kneeAngle, hingeAfterHip)), newKneePos);
 }
 
-// Tilts the foot's orientation to match the ground normal, without disturbing its position.
-inline void alignFootToNormal(glm::mat4& foot, const glm::vec3& terrainNormal) {
-    glm::vec3 currentUp = glm::normalize(glm::vec3(foot[1]));
-    glm::vec3 rotationAxis = glm::cross(currentUp, terrainNormal);
-    if (glm::length(rotationAxis) < 1e-5f) {
+inline void alignFootToNormal(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
+                              int footID, const glm::vec3& terrainNormal) {
+    glm::vec3 localUp(0.f, 1.f, 0.f);
+    float slope = std::acos(glm::clamp(glm::dot(localUp, terrainNormal), -1.f, 1.f));
+    if (slope < 1e-5f) return;
+
+    glm::vec3 axis = glm::cross(localUp, terrainNormal);
+    float axisLength = glm::length(axis);
+    if (axisLength < 1e-6f) return;
+
+    glm::mat3 tilt =
+        glm::mat3(glm::rotate(glm::mat4(1.f), glm::min(slope, maxFootTilt), axis / axisLength));
+    rotateSubtree(skinMatrices, bones, footID, tilt, glm::vec3(skinMatrices[footID][3]));
+}
+
+inline void IKFootCorrect(std::span<glm::mat4> skinMatrices, const std::vector<BoneInfo>& bones,
+                          int leftFootIdx, int rightFootIdx, int leftKneeIdx, int rightKneeIdx,
+                          int leftHipIdx, int rightHipIdx, const glm::mat4& modelMatrix) {
+    if (leftFootIdx < 0 || rightFootIdx < 0 || leftKneeIdx < 0 || rightKneeIdx < 0 ||
+        leftHipIdx < 0 || rightHipIdx < 0) {
         return;
     }
-    float angle = std::acos(glm::clamp(glm::dot(currentUp, terrainNormal), -1.f, 1.f));
-    foot = glm::rotate(foot, angle, glm::normalize(rotationAxis));
-}
 
-inline void IKFootCorrect(glm::mat4& leftFoot, glm::mat4& rightFoot, glm::mat4& leftKnee,
-                          glm::mat4& rightKnee, glm::mat4& leftHip, glm::mat4& rightHip,
-                          glm::mat4& pelvis) {
-    glm::vec3 leftFootTranslation = leftFoot[3];
-    glm::vec3 rightFootTranslation = rightFoot[3];
+    LegChain leftLeg = buildLegChain(bones, skinMatrices, leftHipIdx, leftKneeIdx, leftFootIdx);
+    LegChain rightLeg = buildLegChain(bones, skinMatrices, rightHipIdx, rightKneeIdx, rightFootIdx);
 
-    float leftFootTerrainHeight = 0.f;
-    float rightFootTerrainHeight = 0.f;
-    Chunks.sampleBakedHeight(leftFootTranslation.x, leftFootTranslation.z, leftFootTerrainHeight);
-    Chunks.sampleBakedHeight(rightFootTranslation.x, rightFootTranslation.z,
-                             rightFootTerrainHeight);
+    glm::mat4 invModel = glm::inverse(modelMatrix);
+    glm::mat3 invModelRotation = glm::mat3(invModel);
 
-    glm::vec3 leftFootNormal =
-        Chunks.sampleBakedNormal(leftFootTranslation.x, leftFootTranslation.z);
-    glm::vec3 rightFootNormal =
-        Chunks.sampleBakedNormal(rightFootTranslation.x, rightFootTranslation.z);
+    glm::vec3 leftFootLocal = glm::vec3(skinMatrices[leftFootIdx][3]);
+    glm::vec3 rightFootLocal = glm::vec3(skinMatrices[rightFootIdx][3]);
+    glm::vec3 leftFootWorld = glm::vec3(modelMatrix * glm::vec4(leftFootLocal, 1.f));
+    glm::vec3 rightFootWorld = glm::vec3(modelMatrix * glm::vec4(rightFootLocal, 1.f));
 
-    // Bone lengths measured before any correction is applied, since they're invariant to it.
-    float leftThighLength = glm::length(glm::vec3(leftKnee[3]) - glm::vec3(leftHip[3]));
-    float leftShinLength = glm::length(leftFootTranslation - glm::vec3(leftKnee[3]));
-    float rightThighLength = glm::length(glm::vec3(rightKnee[3]) - glm::vec3(rightHip[3]));
-    float rightShinLength = glm::length(rightFootTranslation - glm::vec3(rightKnee[3]));
+    float leftTerrainHeightWorld = 0.f;
+    float rightTerrainHeightWorld = 0.f;
+    bool leftSampled =
+        Chunks.sampleBakedHeight(leftFootWorld.x, leftFootWorld.z, leftTerrainHeightWorld);
+    bool rightSampled =
+        Chunks.sampleBakedHeight(rightFootWorld.x, rightFootWorld.z, rightTerrainHeightWorld);
+    if (!leftSampled || !rightSampled) {
+        return;
+    }
 
-    float deltaLeftFoot = leftFootTerrainHeight - leftFootTranslation.y;
-    float deltaRightFoot = rightFootTerrainHeight - rightFootTranslation.y;
-    // Drop the pelvis by the worse (most negative) offset so neither leg has to overextend;
-    // the leg with the smaller offset just ends up bent rather than fully straight.
-    float pelvisOffset = std::min(deltaLeftFoot, deltaRightFoot);
+    glm::vec3 leftNormalWorld = Chunks.sampleBakedNormal(leftFootWorld.x, leftFootWorld.z);
+    glm::vec3 rightNormalWorld = Chunks.sampleBakedNormal(rightFootWorld.x, rightFootWorld.z);
+    glm::vec3 leftNormalLocal = glm::normalize(invModelRotation * leftNormalWorld);
+    glm::vec3 rightNormalLocal = glm::normalize(invModelRotation * rightNormalWorld);
 
-    pelvis[3].y += pelvisOffset;
-    leftHip[3].y += pelvisOffset;
-    rightHip[3].y += pelvisOffset;
+    float leftAnkleTargetWorld = leftTerrainHeightWorld + leftLeg.ankleHeight;
+    float rightAnkleTargetWorld = rightTerrainHeightWorld + rightLeg.ankleHeight;
+    float deltaLeftFoot = leftAnkleTargetWorld - leftFootWorld.y;
+    float deltaRightFoot = rightAnkleTargetWorld - rightFootWorld.y;
 
-    glm::vec3 leftTarget(leftFootTranslation.x, leftFootTerrainHeight, leftFootTranslation.z);
-    glm::vec3 rightTarget(rightFootTranslation.x, rightFootTerrainHeight, rightFootTranslation.z);
+    float swingThreshold = 0.15f * glm::min(leftLeg.shinLength, rightLeg.shinLength);
+    float footHeightDifference = leftFootLocal.y - rightFootLocal.y;
+    bool leftSwinging = footHeightDifference > swingThreshold;
+    bool rightSwinging = -footHeightDifference > swingThreshold;
 
-    solveLeg(leftFoot, leftKnee, leftHip, leftTarget, leftThighLength, leftShinLength);
-    solveLeg(rightFoot, rightKnee, rightHip, rightTarget, rightThighLength, rightShinLength);
+    float airborneTolerance = 0.5f * glm::min(leftLeg.shinLength, rightLeg.shinLength);
+    if (deltaLeftFoot < -airborneTolerance && deltaRightFoot < -airborneTolerance) {
+        return;
+    }
 
-    alignFootToNormal(leftFoot, leftFootNormal);
-    alignFootToNormal(rightFoot, rightFootNormal);
+    bool leftGrounded = !leftSwinging;
+    bool rightGrounded = !rightSwinging;
+
+    glm::vec3 leftTargetWorld(leftFootWorld.x, leftAnkleTargetWorld, leftFootWorld.z);
+    glm::vec3 rightTargetWorld(rightFootWorld.x, rightAnkleTargetWorld, rightFootWorld.z);
+    glm::vec3 leftTargetLocal = glm::vec3(invModel * glm::vec4(leftTargetWorld, 1.f));
+    glm::vec3 rightTargetLocal = glm::vec3(invModel * glm::vec4(rightTargetWorld, 1.f));
+
+    float pelvisOffset = 0.f;
+    if (leftGrounded && rightGrounded) {
+        pelvisOffset = std::min(deltaLeftFoot, deltaRightFoot);
+    } else if (leftGrounded) {
+        pelvisOffset = deltaLeftFoot;
+    } else if (rightGrounded) {
+        pelvisOffset = deltaRightFoot;
+    }
+
+    auto reachInterval = [&](const LegChain& leg, const glm::vec3& targetLocal, float& low,
+                             float& high) {
+        glm::vec3 toTarget = targetLocal - glm::vec3(skinMatrices[leg.hipID][3]);
+        float reach = leg.thighLength + leg.shinLength - 1e-3f;
+        float horizontal = glm::length(glm::vec2(toTarget.x, toTarget.z));
+        if (horizontal >= reach) return false;
+        float span = std::sqrt(reach * reach - horizontal * horizontal);
+        low = toTarget.y - span;
+        high = toTarget.y + span;
+        return true;
+    };
+
+    float lowestAllowed = std::numeric_limits<float>::lowest();
+    float highestAllowed = std::numeric_limits<float>::max();
+    float low = 0.f;
+    float high = 0.f;
+    if (leftGrounded && reachInterval(leftLeg, leftTargetLocal, low, high)) {
+        lowestAllowed = glm::max(lowestAllowed, low);
+        highestAllowed = glm::min(highestAllowed, high);
+    }
+    if (rightGrounded && reachInterval(rightLeg, rightTargetLocal, low, high)) {
+        lowestAllowed = glm::max(lowestAllowed, low);
+        highestAllowed = glm::min(highestAllowed, high);
+    }
+    if (lowestAllowed > highestAllowed) {
+        float compromise = 0.5f * (lowestAllowed + highestAllowed);
+        lowestAllowed = compromise;
+        highestAllowed = compromise;
+    }
+    pelvisOffset = glm::clamp(pelvisOffset, lowestAllowed, highestAllowed);
+
+    for (glm::mat4& boneMatrix : skinMatrices) {
+        boneMatrix[3].y += pelvisOffset;
+    }
+
+    if (leftGrounded) {
+        solveLeg(skinMatrices, bones, leftLeg, leftTargetLocal);
+        alignFootToNormal(skinMatrices, bones, leftFootIdx, leftNormalLocal);
+    }
+    if (rightGrounded) {
+        solveLeg(skinMatrices, bones, rightLeg, rightTargetLocal);
+        alignFootToNormal(skinMatrices, bones, rightFootIdx, rightNormalLocal);
+    }
 }
 
 }  // namespace IKFootCorrector

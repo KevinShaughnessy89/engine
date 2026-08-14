@@ -6,5 +6,7 @@ uniform mat4 view;
 uniform mat4 projection;
 
 void main() {
-    gl_Position = projection * view * model * position;
+    mat3 mat3Rot = mat3(view);
+    mat4 rotView = mat4(mat3Rot);
+    gl_Position = projection * rotView * model * position;
 }

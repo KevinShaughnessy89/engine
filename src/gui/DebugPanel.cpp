@@ -309,12 +309,20 @@ void DebugPanel::renderDebugPanel() {
             ImGui::Separator();
             if (ImGui::BeginTabBar("TerrainSubTabs")) {
                 if (ImGui::BeginTabItem("Rendering")) {
-                    if (pendingTriangleCount < 0)
-                        pendingTriangleCount = TerrainConfig::triangleCount;
+                    if (pendingTriangleExponent < 0) {
+                        // Round up to the next power of two if the current count isn't one
+                        pendingTriangleExponent = minTriangleExponent;
+                        while (pendingTriangleExponent < maxTriangleExponent &&
+                               (1 << pendingTriangleExponent) < TerrainConfig::triangleCount)
+                            pendingTriangleExponent++;
+                    }
 
-                    ImGui::SliderInt("Triangle Count", &pendingTriangleCount, 2, 512);
+                    std::string triangleCountLabel = std::to_string(1 << pendingTriangleExponent);
+                    ImGui::SliderInt("Triangle Count", &pendingTriangleExponent,
+                                     minTriangleExponent, maxTriangleExponent,
+                                     triangleCountLabel.c_str(), ImGuiSliderFlags_NoInput);
                     if (ImGui::Button("Apply")) {
-                        TerrainConfig::triangleCount = pendingTriangleCount;
+                        TerrainConfig::triangleCount = 1 << pendingTriangleExponent;
                         Chunks.regenerateTerrain();
                     }
 

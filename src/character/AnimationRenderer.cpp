@@ -5,6 +5,7 @@
 #include "IKFootCorrector.hpp"
 #include "components/rendering/AnimationState.hpp"
 #include "components/rendering/SkeletonComponent.hpp"
+#include "rendering/UniformUpdater.hpp"
 
 namespace AnimationRenderer {
 
@@ -24,7 +25,7 @@ struct AnimationBlendState {
     float toTime = 0.0f;
     float blendElapsed = 0.0f;
     float blendDuration = 0.15f;
-    float isBlending = false;
+    bool isBlending = false;
 };
 
 void startClipTransition(AnimationBlendState& blendState, int nextClipID, float blendDuration) {
@@ -118,12 +119,39 @@ glm::mat4 sampleChannel(const AnimationChannel& channel, float time) {
     return T * R * S;
 }
 
-glm::mat4 sampleBlendedChannels(const AnimationBlendState blendState, float time) {
+glm::mat4 sampleBlendedChannels(const AnimationBlendState& blendState,
+                                const std::vector<AnimationClip>& clips, const std::string& boneName,
+                                const glm::mat4& localBindTransform) {
+    auto channelFor = [&](int clipID) -> const AnimationChannel* {
+        if (clipID < 0 || clipID >= (int)clips.size()) return nullptr;
+        auto channelIt = clips[clipID].channels.find(boneName);
+        return channelIt != clips[clipID].channels.end() ? &channelIt->second : nullptr;
+    };
+
+    const AnimationChannel* from = channelFor(blendState.fromClipID);
+    const AnimationChannel* to = channelFor(blendState.toClipID);
+    if (!from && !to) return localBindTransform;
+    if (!from) return sampleChannel(*to, blendState.toTime);
+    if (!to) return sampleChannel(*from, blendState.fromTime);
+
+    float factor = blendState.blendDuration > 0.0f
+                       ? glm::clamp(blendState.blendElapsed / blendState.blendDuration, 0.0f, 1.0f)
+                       : 1.0f;
+
+    glm::vec3 position = glm::mix(interpolatePosition(from->positionKeys, blendState.fromTime),
+                                  interpolatePosition(to->positionKeys, blendState.toTime), factor);
+    glm::quat rotation = glm::slerp(interpolateRotation(from->rotationKeys, blendState.fromTime),
+                                    interpolateRotation(to->rotationKeys, blendState.toTime), factor);
+    glm::vec3 scale = glm::mix(interpolateScale(from->scaleKeys, blendState.fromTime),
+                               interpolateScale(to->scaleKeys, blendState.toTime), factor);
+
+    return glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) *
+           glm::scale(glm::mat4(1.0f), scale);
 }
 
 void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
                          const AnimationState& animationState, float rawTime,
-                         std::span<glm::mat4> skinMatrices) {
+                         std::span<glm::mat4> skinMatrices, const glm::mat4& modelMatrix) {
     const int numBones = skeleton.bones.size();
 
     std::vector<glm::mat4>& M_anim = skeleton.animatedTransforms;
@@ -173,21 +201,21 @@ void computeSkinMatrices(SkeletonComponent& skeleton, const AnimationClip& clip,
 
     // skinMatrices doubles as scratch space for the global animated transforms (G_anim)
     // before being turned into the final skin matrices in the second pass below.
-    glm::mat4 leftFoot, rightFoot, leftKnee, rightKnee, leftHip, rightHip, pelvis;
+    int leftFootIdx = -1, rightFootIdx = -1, leftKneeIdx = -1, rightKneeIdx = -1, leftHipIdx = -1,
+        rightHipIdx = -1;
     for (int i = 0; i < numBones; i++) {
         const BoneInfo& bone = skeleton.bones[i];
-        if (bone.name == "LeftFoot") leftFoot = M_anim[i];
-        if (bone.name == "RightFoot") rightFoot = M_anim[i];
-        if (bone.name == "LeftKnee") leftKnee = M_anim[i];
-        if (bone.name == "RightKnee") rightKnee = M_anim[i];
-        if (bone.name == "LeftHip") leftHip = M_anim[i];
-        if (bone.name == "RightHip") rightHip = M_anim[i];
-        if (bone.name == "Pelvis") pelvis = M_anim[i];
+        if (bone.name == "LeftFoot") leftFootIdx = i;
+        if (bone.name == "RightFoot") rightFootIdx = i;
+        if (bone.name == "LeftLeg") leftKneeIdx = i;
+        if (bone.name == "RightLeg") rightKneeIdx = i;
+        if (bone.name == "LeftUpLeg") leftHipIdx = i;
+        if (bone.name == "RightUpLeg") rightHipIdx = i;
         skinMatrices[i] = bone.parentID == -1 ? M_anim[i] : skinMatrices[bone.parentID] * M_anim[i];
     }
 
-    IKFootCorrector::IKFootCorrect(leftFoot, rightFoot, leftKnee, rightKnee, leftHip, rightHip,
-                                   pelvis);
+    IKFootCorrector::IKFootCorrect(skinMatrices, skeleton.bones, leftFootIdx, rightFootIdx,
+                                   leftKneeIdx, rightKneeIdx, leftHipIdx, rightHipIdx, modelMatrix);
 
     for (int i = 0; i < numBones; i++) {
         skinMatrices[i] = skinMatrices[i] * skeleton.bones[i].offsetMatrix;
@@ -221,7 +249,9 @@ void updateAnimationState(float deltaTime, GLuint ssbo) {
         glm::mat4* slice =
             allSkinMatrices.data() + entityIndex * AnimationRenderer::MAX_BONES_PER_SKELETON;
         std::span<glm::mat4> skinMatricesSpan(slice, skeleton.bones.size());
-        computeSkinMatrices(skeleton, animationClip, animationState, rawTime, skinMatricesSpan);
+        glm::mat4 modelMatrix = UniformUpdater::calculateModelMatrix(entity);
+        computeSkinMatrices(skeleton, animationClip, animationState, rawTime, skinMatricesSpan,
+                           modelMatrix);
 
         entityIndex++;
     }

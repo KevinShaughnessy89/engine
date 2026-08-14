@@ -25,7 +25,11 @@ class DebugPanel {
     // Terrain > Rendering sub-tab: same pending-value-until-Apply pattern as pendingCascadeCount,
     // but the regen this triggers (ChunkManager::regenerateTerrain()) is far more expensive, so
     // it's even more important not to fire it on every slider tick.
-    int pendingTriangleCount = -1;
+    // Slider drives the exponent, not the count -- TerrainConfig::triangleCount gets 2^n, since the
+    // LOD chain halves it twice (see ChunkModel) and only powers of two divide evenly.
+    int pendingTriangleExponent = -1;
+    static constexpr int minTriangleExponent = 1;   // 2 triangles
+    static constexpr int maxTriangleExponent = 9;   // 512 triangles
     // Sky tab: snapshot of SunState taken the first time the tab is opened (before any edits),
     // restored verbatim by the Revert button. DebugState::sunManualOverride freezes the per-frame
     // sun simulation from the moment this is taken, so it stays a meaningful baseline.
